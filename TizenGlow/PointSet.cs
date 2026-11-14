@@ -25,20 +25,25 @@ namespace TizenGlow
         /// <summary>Height of each black bar the top and bottom rows allow for, as a share of the screen (0 = none).</summary>
         public readonly double Bars;
 
+        /// <summary>How far in from the edge the sample points sit, as a share of the screen.</summary>
+        public readonly double Inset;
+
         public int Count { get { return Points.Length; } }
 
-        public PointSet(int top, int right, int bottom, int left, double bars = 0)
+        public PointSet(int top, int right, int bottom, int left, double bars = 0, double inset = EdgeInset)
         {
             foreach (int n in new[] { top, right, bottom, left })
                 if (n < 0 || n > 16) throw new ArgumentOutOfRangeException(nameof(top), "0-16 points per edge");
             if (top + right + bottom + left == 0) throw new ArgumentException("a point set needs at least one point");
             if (bars < 0 || bars > 0.4) throw new ArgumentOutOfRangeException(nameof(bars));
+            if (inset <= 0 || inset >= 0.45) throw new ArgumentOutOfRangeException(nameof(inset));
 
             PerEdge = new[] { top, right, bottom, left };
             Bars = bars;
+            Inset = inset;
             Points = new CapturePoint[top + right + bottom + left];
             Edges = new int[4][];
-            double rowInset = bars + EdgeInset * (1 - 2 * bars);
+            double rowInset = bars + inset * (1 - 2 * bars);
             int k = 0;
             for (int edge = 0; edge < 4; edge++)
             {
@@ -50,9 +55,9 @@ namespace TizenGlow
                     switch (edge)
                     {
                         case 0: Points[k] = new CapturePoint(t, rowInset); break;
-                        case 1: Points[k] = new CapturePoint(1 - EdgeInset, t); break;
+                        case 1: Points[k] = new CapturePoint(1 - inset, t); break;
                         case 2: Points[k] = new CapturePoint(1 - t, 1 - rowInset); break;
-                        default: Points[k] = new CapturePoint(EdgeInset, 1 - t); break;
+                        default: Points[k] = new CapturePoint(inset, 1 - t); break;
                     }
                 }
             }
@@ -61,7 +66,19 @@ namespace TizenGlow
         /// <summary>The same counts with the rows moved in for bars of this height.</summary>
         public PointSet WithBars(double bars)
         {
-            return bars == Bars ? this : new PointSet(PerEdge[0], PerEdge[1], PerEdge[2], PerEdge[3], bars);
+            return bars == Bars ? this : new PointSet(PerEdge[0], PerEdge[1], PerEdge[2], PerEdge[3], bars, Inset);
+        }
+
+        /// <summary>Returns a PointSet keeping only edges with LEDs; avoids wasting capture rounds on 0-LED edges.</summary>
+        public PointSet ForActiveEdges(bool top, bool right, bool bottom, bool left)
+        {
+            int t = top ? PerEdge[0] : 0;
+            int r = right ? PerEdge[1] : 0;
+            int b = bottom ? PerEdge[2] : 0;
+            int l = left ? PerEdge[3] : 0;
+            if (t + r + b + l == 0) return this;
+            if (t == PerEdge[0] && r == PerEdge[1] && b == PerEdge[2] && l == PerEdge[3]) return this;
+            return new PointSet(t, r, b, l, Bars, Inset);
         }
 
         /// <summary>"2/2/2/2": points on the top, right, bottom and left edges.</summary>

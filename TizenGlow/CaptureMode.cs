@@ -40,13 +40,15 @@ namespace TizenGlow
 
         public static readonly CaptureMode Fast = Make("fast", "Fast", 2, 1, 2, 1, 20, 1000, 5000, 60);
         public static readonly CaptureMode Balanced = Make("balanced", "Balanced", 2, 2, 2, 2, 15, 5000, 10000, 100);
-        public static readonly CaptureMode Detailed = Make("detailed", "Detailed", 4, 3, 4, 3, 10, 5000, 10000, 150);
+        public static readonly CaptureMode Detailed = Make("detailed", "Detailed", 4, 3, 4, 3, 15, 5000, 10000, 150);
+        public static readonly CaptureMode Optimized = Make("optimized", "Optimized", 4, 3, 4, 3, 20, 5000, 10000, 150);
+        public static readonly CaptureMode Cinema = Make("cinema", "Cinema", 2, 2, 2, 2, 15, 5000, 10000, 1500, 0.20);
 
-        public static readonly CaptureMode[] All = { Fast, Balanced, Detailed };
+        public static readonly CaptureMode[] All = { Fast, Balanced, Detailed, Optimized, Cinema };
 
-        private static CaptureMode Make(string name, string label, int top, int right, int bottom, int left, int fps, int backoff, int retry, int smoothing)
+        private static CaptureMode Make(string name, string label, int top, int right, int bottom, int left, int fps, int backoff, int retry, int smoothing, double inset = PointSet.EdgeInset)
         {
-            var points = new PointSet(top, right, bottom, left);
+            var points = new PointSet(top, right, bottom, left, 0, inset);
             return new CaptureMode
             {
                 Name = name, Label = label, Points = points, BarsPoints = points.WithBars(Letterbox.BarHeight),

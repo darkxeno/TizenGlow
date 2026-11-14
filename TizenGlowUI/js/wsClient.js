@@ -88,8 +88,8 @@ window.stepTargetFps = (step, wrap) => {
 }
 
 // Must match CaptureMode.cs ("smooth" was the old name of the 14-point mode).
-const captureModes = ['fast', 'balanced', 'detailed'];
-const captureModeLabels = { fast: 'Fast', balanced: 'Balanced', detailed: 'Detailed' };
+const captureModes = ['fast', 'balanced', 'detailed', 'optimized', 'cinema'];
+const captureModeLabels = { fast: 'Fast', balanced: 'Balanced', detailed: 'Detailed', optimized: 'Optimized', cinema: 'Cinema' };
 let captureMode = 'balanced';
 
 function showCaptureMode(mode) {
