@@ -1,8 +1,8 @@
 // This page's version. Must equal tizen-manifest.xml and package.json; the release workflow checks.
-const uiVersion = '1.3.1';
+const uiVersion = '1.3.2';
 // Oldest service (TPK) this page works with. Raise it only when the page needs something new from the
 // service; a page-only release leaves it, and that release's TPK is then optional.
-const minService = '1.3.0'; // strip off with the TV
+const minService = '1.3.2'; // strip off with the TV
 
 let client;
 let deviceIP;

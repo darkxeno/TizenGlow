@@ -1,7 +1,7 @@
 {
   "name": "@duckieonquacks/tizenglow",
   "appName": "TizenGlow",
-  "version": "1.3.1",
+  "version": "1.3.2",
   "description": "TizenGlow lights WLED or HyperHDR LEDs from what's on a Samsung Tizen TV's screen.",
   "packageType": "app",
   "appPath": "TizenGlowUI/index.html",
@@ -9,7 +9,7 @@
   "serviceFile": "TizenGlowUI/js/service.js",
   "keys": [],
   "repository": {
-    "url": "https://github.com/DuckieOnQuacks/TizenGlow"
+    "url": "https://github.com/darkxeno/TizenGlow"
   },
   "license": "GPL-3.0-only"
 }
