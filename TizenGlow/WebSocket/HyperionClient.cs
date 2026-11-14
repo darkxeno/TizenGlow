@@ -134,6 +134,8 @@ namespace TizenGlow.WebSocket
             if (output == Wled) Wled.Describe(s);
 
             PointSet points = Letterbox.Inset ? _mode.BarsPoints : _mode.Points;
+            if (output == Wled && Wled.Layout != null)
+                points = points.ForActiveEdges(Wled.Layout.Top > 0, Wled.Layout.Right > 0, Wled.Layout.Bottom > 0, Wled.Layout.Left > 0);
             Condition condition = Capturer.CurrentCondition;
             s.points = points.Count;
             s.pointsPerEdge = points.Describe();
@@ -185,6 +187,8 @@ namespace TizenGlow.WebSocket
                 {
                     bool probe;
                     PointSet points = Letterbox.Choose(mode, start, out probe);
+                    if (!probe && output == Wled && Wled.Layout != null)
+                        points = points.ForActiveEdges(Wled.Layout.Top > 0, Wled.Layout.Right > 0, Wled.Layout.Bottom > 0, Wled.Layout.Left > 0);
                     Capturer.SetCapturePoints(points.Points);
                     Color[] colors = Capturer.GetColors();
                     captured = Stats.Now();

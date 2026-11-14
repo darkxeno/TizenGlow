@@ -1,0 +1,15 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="../TizenGlow/PointSet.cs" />
+    <Compile Include="../TizenGlow/CaptureMode.cs" />
+    <Compile Include="../TizenGlow/Letterbox.cs" />
+    <Compile Include="../TizenGlow/Wled/LedLayout.cs" />
+    <Compile Include="../TizenGlow/Wled/NanoleafSender.cs" />
+  </ItemGroup>
+</Project>

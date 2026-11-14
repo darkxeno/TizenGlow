@@ -39,6 +39,7 @@ namespace TizenGlow.Wled
         private readonly Func<double> _clock;
         private readonly Func<int> _smoothingMs;
         private DdpSender _sender;
+        private readonly NanoleafSender _nanoleaf = new NanoleafSender();
 
         private string _host;
         private int _port;
@@ -63,6 +64,9 @@ namespace TizenGlow.Wled
         private double _lastRenderMs, _targetAt;
         private float[] _leds = new float[0];
         private byte[] _rgb = new byte[0];
+        private byte[] _wledRemapRgb = new byte[0];
+        private LedLayout _remapLayout;
+        private int[] _remapTopSlots = Array.Empty<int>();
         private int _frameLength;
         private readonly Queue<double> _sendTimes = new Queue<double>();
 
@@ -279,7 +283,11 @@ namespace TizenGlow.Wled
             string error = await PostStateAsync(host, "{\"on\":false,\"live\":false}");
             lock (_lock)
             {
-                if (error == null) _switchedOff = true;
+                if (error == null)
+                {
+                    _switchedOff = true;
+                    _nanoleaf?.ResetExtControl();
+                }
                 else Fail(_clock(), "couldn't switch the strip off with the TV: " + error);
             }
         }
@@ -531,7 +539,15 @@ namespace TizenGlow.Wled
             try
             {
                 if (_sender == null) _sender = new DdpSender();
-                int packets = _sender.Send(_endpoint, rgb, length);
+                _nanoleaf?.Send(rgb, length, _layout);
+                byte[] wledRgb = rgb;
+                if (_layout != null && _layout.Top > 1)
+                {
+                    if (_wledRemapRgb.Length < length) _wledRemapRgb = new byte[length];
+                    NanoleafSender.RemapTopRightCorner(rgb, length, _layout, _wledRemapRgb, ref _remapLayout, ref _remapTopSlots);
+                    wledRgb = _wledRemapRgb;
+                }
+                int packets = _sender.Send(_endpoint, wledRgb, length);
                 double end = _clock();
                 _lastSendMs = end - now;
                 _framesSent++;
