@@ -128,8 +128,10 @@
                     <h2>Nanoleaf</h2>
                     <div class="form">
                         <button id="nanoleafEnabled" data-step="stepNanoleafEnabled" onclick="stepNanoleafEnabled(1, true)">Nanoleaf: &lt; Off &gt;</button>
+                        <button id="nanoleafAutoDiscover" data-step="stepNanoleafAutoDiscover" onclick="stepNanoleafAutoDiscover(1, true)">Auto-detect IP: &lt; On &gt;</button>
                         <label for="nanoleafIp">Nanoleaf IP</label>
                         <input type="text" id="nanoleafIp" placeholder="e.g. 192.168.10.168" autocomplete="off" autocapitalize="off" spellcheck="false">
+                        <button id="nanoleafDetect" onclick="detectNanoleafIp()">Detect Nanoleaf IP</button>
                         <label for="nanoleafToken">Auth token</label>
                         <input type="text" id="nanoleafToken" placeholder="Nanoleaf API token" autocomplete="off" autocapitalize="off" spellcheck="false">
                         <button id="nanoleafSave" onclick="saveNanoleafTarget()">Save Nanoleaf</button>

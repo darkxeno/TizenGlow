@@ -278,6 +278,7 @@ namespace TizenGlow.Wled
         }
 
         public bool TrySetNanoleafEnabled(string value) => _nanoleaf.TrySetEnabled(value);
+        public bool TrySetNanoleafAutoDiscover(string value) => _nanoleaf.TrySetAutoDiscover(value);
         public bool TrySetNanoleafIp(string value) => _nanoleaf.TrySetIp(value);
         public bool TrySetNanoleafToken(string value) => _nanoleaf.TrySetToken(value);
         public bool TrySetNanoleafEdge(string value) => _nanoleaf.TrySetEdge(value);

@@ -52,6 +52,7 @@ namespace TizenGlow.Wled
         private static readonly HttpClient Http = new HttpClient { Timeout = TimeSpan.FromSeconds(3) };
 
         private volatile bool _enabled;
+        private volatile bool _autoDiscover = true;
         private volatile string _ip;
         private readonly int _udpPort;
         private readonly int _httpPort;
@@ -101,6 +102,7 @@ namespace TizenGlow.Wled
 
         public int PacketLength => _packet.Length;
         public bool Enabled => _enabled;
+        public bool AutoDiscover => _autoDiscover;
         public string Ip => _ip;
         public string Token => _token;
         public int Edge => _edge;
@@ -112,6 +114,13 @@ namespace TizenGlow.Wled
             if (value != "on" && value != "off") return false;
             _enabled = value == "on";
             if (!_enabled) ResetExtControl();
+            return true;
+        }
+
+        public bool TrySetAutoDiscover(string value)
+        {
+            if (value != "on" && value != "off") return false;
+            _autoDiscover = value == "on";
             return true;
         }
 
@@ -305,7 +314,12 @@ namespace TizenGlow.Wled
 
         public void Send(byte[] rgb, int length, LedLayout layout)
         {
-            if (!_enabled || _udpEndpoint == null || string.IsNullOrEmpty(_token)) return;
+            if (!_enabled || string.IsNullOrEmpty(_token)) return;
+            if (_udpEndpoint == null)
+            {
+                if (_autoDiscover) EnsureExtControlAsync();
+                return;
+            }
             byte[] pkt = BuildPacket(rgb, length, layout);
             if (pkt == null) return;
 
@@ -350,7 +364,8 @@ namespace TizenGlow.Wled
 
         private void EnsureExtControlAsync()
         {
-            if (!_enabled || string.IsNullOrEmpty(_ip) || string.IsNullOrEmpty(_token)) return;
+            if (!_enabled || string.IsNullOrEmpty(_token)) return;
+            if (string.IsNullOrEmpty(_ip) && !_autoDiscover) return;
             if (Volatile.Read(ref _extControlStarted) == 1) return;
             long nowTicks = DateTime.UtcNow.Ticks;
             long prevTicks = Interlocked.Read(ref _lastExtControlAttemptTicks);
@@ -360,7 +375,8 @@ namespace TizenGlow.Wled
             string ipSnapshot = _ip;
             Task.Run(async () =>
             {
-                if (await TryEnableExtControlAsync(ipSnapshot)) return;
+                if (!string.IsNullOrEmpty(ipSnapshot) && await TryEnableExtControlAsync(ipSnapshot)) return;
+                if (!_autoDiscover) return;
 
                 string discovered = DiscoverNanoleafIp();
                 if (discovered != null && discovered != ipSnapshot)
@@ -396,7 +412,7 @@ namespace TizenGlow.Wled
             return false;
         }
 
-        private static string DiscoverNanoleafIp()
+        public static string DiscoverNanoleafIp()
         {
             try
             {

@@ -146,6 +146,7 @@ internal static class Program
     {
         using var sender = new NanoleafSender();
         Assert(!sender.Enabled, "NanoleafSender should be disabled by default");
+        Assert(sender.AutoDiscover, "NanoleafSender AutoDiscover should be enabled by default");
         Assert(sender.Ip == "", "NanoleafSender IP should be empty by default");
         Assert(sender.Token == "", "NanoleafSender token should be empty by default");
         Assert(sender.Edge == 0, "NanoleafSender edge should default to Top (0)");
@@ -154,6 +155,10 @@ internal static class Program
         Assert(sender.TrySetEnabled("on") && sender.Enabled, "Should enable Nanoleaf");
         Assert(sender.TrySetEnabled("off") && !sender.Enabled, "Should disable Nanoleaf");
         Assert(!sender.TrySetEnabled("maybe"), "Should reject invalid enabled value");
+
+        Assert(sender.TrySetAutoDiscover("off") && !sender.AutoDiscover, "Should disable AutoDiscover");
+        Assert(sender.TrySetAutoDiscover("on") && sender.AutoDiscover, "Should enable AutoDiscover");
+        Assert(!sender.TrySetAutoDiscover("auto"), "Should reject invalid AutoDiscover value");
 
         Assert(sender.TrySetIp("192.168.10.168") && sender.Ip == "192.168.10.168", "Should accept valid IPv4");
         Assert(!sender.TrySetIp("not-an-ip"), "Should reject invalid IP");

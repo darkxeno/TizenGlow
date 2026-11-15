@@ -141,6 +141,13 @@ namespace TizenGlow.WebSocket
                     ? new ReadConfigResultEvent(false, readConfigEvent.key, preview)
                     : new ReadConfigResultEvent(true, readConfigEvent.key, "No LED frame yet."));
             }
+            else if (readConfigEvent.key == "nanoleafDiscover")
+            {
+                string ip = await Task.Run(() => TizenGlow.Wled.NanoleafSender.DiscoverNanoleafIp());
+                result = JsonConvert.SerializeObject(!string.IsNullOrEmpty(ip)
+                    ? new ReadConfigResultEvent(false, readConfigEvent.key, ip)
+                    : new ReadConfigResultEvent(true, readConfigEvent.key, "No Nanoleaf found on the network."));
+            }
             else if (!Preference.Contains(readConfigEvent.key))
             {
                 result = JsonConvert.SerializeObject(new ReadConfigResultEvent(true, readConfigEvent.key, "Key doesn't exist."));
@@ -252,6 +259,11 @@ namespace TizenGlow.WebSocket
                 case "nanoleafEnabled":
                     {
                         if (!App.client.Wled.TrySetNanoleafEnabled(setConfigEvent.value)) return; // on / off
+                        break;
+                    }
+                case "nanoleafAutoDiscover":
+                    {
+                        if (!App.client.Wled.TrySetNanoleafAutoDiscover(setConfigEvent.value)) return; // on / off
                         break;
                     }
                 case "nanoleafIp":

@@ -94,6 +94,7 @@ namespace TizenGlow.WebSocket
             if (Preference.Contains("wledTvOff")) Wled.TrySetTvOff(Preference.Get<string>("wledTvOff"));
             if (Preference.Contains("wledTopRange")) Wled.TrySetWledTopRange(Preference.Get<string>("wledTopRange"));
             if (Preference.Contains("nanoleafEnabled")) Wled.TrySetNanoleafEnabled(Preference.Get<string>("nanoleafEnabled"));
+            if (Preference.Contains("nanoleafAutoDiscover")) Wled.TrySetNanoleafAutoDiscover(Preference.Get<string>("nanoleafAutoDiscover"));
             if (Preference.Contains("nanoleafIp")) Wled.TrySetNanoleafIp(Preference.Get<string>("nanoleafIp"));
             if (Preference.Contains("nanoleafToken")) Wled.TrySetNanoleafToken(Preference.Get<string>("nanoleafToken"));
             if (Preference.Contains("nanoleafEdge")) Wled.TrySetNanoleafEdge(Preference.Get<string>("nanoleafEdge"));
