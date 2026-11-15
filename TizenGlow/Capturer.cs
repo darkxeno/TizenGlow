@@ -208,7 +208,12 @@ namespace TizenGlow
             Color[] planeColors;
             if (TgvpUdpReceiver.TryGetColors(_capturedPoints, out planeColors))
             {
-                string tgvpStatus = TgvpUdpReceiver.Status;
+                string modeName = WebSocket.HyperionClient.Mode != null ? WebSocket.HyperionClient.Mode.Name : "balanced";
+                string bridgeProf = (modeName == "cinema" || modeName == "pro_cinema" || modeName == "cinemapro") ? "cinema"
+                    : (modeName == "balancedpro" || modeName == "optimized" || modeName == "balanced") ? "balanced_pro"
+                    : "detailed";
+                string hdrTag = VideoPlaneCapturer.HdrSetting == "on" ? "HDR" : "SDR";
+                string tgvpStatus = TgvpUdpReceiver.Status + " [" + bridgeProf + ", " + hdrTag + "]";
                 if (!string.Equals(tgvpStatus, _lastVpStatus, StringComparison.Ordinal))
                 {
                     _lastVpStatus = tgvpStatus;
