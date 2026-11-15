@@ -49,6 +49,9 @@ jobs:
           echo "VERSION=$manifest" >> "$GITHUB_ENV"
           echo "MIN_SERVICE=$min" >> "$GITHUB_ENV"
 
+      - name: Run tests
+        run: dotnet run --project TizenGlow.Tests/TizenGlow.Tests.csproj -c Release
+
       - name: Build TPK
         run: dotnet build TizenGlow/TizenGlow.csproj -c Release
 
