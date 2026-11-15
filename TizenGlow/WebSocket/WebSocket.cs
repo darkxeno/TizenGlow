@@ -311,6 +311,11 @@ namespace TizenGlow.WebSocket
                         if (!Letterbox.TrySetMode(setConfigEvent.value)) return; // off / auto / on
                         break;
                     }
+                case "vpEnabled":
+                    {
+                        if (!VideoPlaneCapturer.TrySetEnabled(setConfigEvent.value)) return; // on / off
+                        break;
+                    }
                 case "vpHdr":
                     {
                         if (!VideoPlaneCapturer.TrySetHdr(setConfigEvent.value)) return; // on / off
