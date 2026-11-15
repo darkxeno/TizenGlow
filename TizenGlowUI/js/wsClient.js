@@ -163,10 +163,12 @@ const letterboxLabels = { off: 'Off', auto: 'Auto', on: 'Always' };
 const letterboxSel = makeSelector('letterbox', Object.keys(letterboxLabels), 'auto', v => `Black bars: &lt; ${letterboxLabels[v]} &gt;`, 'letterbox');
 const levelsSel = makeSelector('levels', ['on', 'off'], 'on', v => `Levels: &lt; ${v === 'on' ? 'On' : 'Off'} &gt;`, 'levels');
 const autostartSel = makeSelector('autostart', ['on', 'off'], 'on', v => `Start with the TV: &lt; ${v === 'on' ? 'On' : 'Off'} &gt;`, 'autostart');
+const vpEnabledSel = makeSelector('vpEnabled', ['off', 'on'], 'off', v => `VideoPlane: &lt; ${v === 'on' ? 'On' : 'Off'} &gt;`, 'vpEnabled');
 const vpHdrSel = makeSelector('vpHdr', ['on', 'off'], 'on', v => `VideoPlane colour: &lt; ${v === 'on' ? 'HDR (PQ)' : 'SDR (BT.601)'} &gt;`, 'vpHdr');
 const vpBlackBarsSel = makeSelector('vpBlackBars', ['on', 'off'], 'on', v => `VideoPlane bars: &lt; ${v === 'on' ? 'On' : 'Off'} &gt;`, 'vpBlackBars');
 const vpSpatialBlurSel = makeSelector('vpSpatialBlur', [0, 10, 25, 40, 50], 25, v => `Spatial blur: &lt; ${v === 0 ? 'Off' : v + '%'} &gt;`, 'vpSpatialBlur');
 window.stepLetterbox = letterboxSel.step;
+window.stepVpEnabled = vpEnabledSel.step;
 window.stepVpHdr = vpHdrSel.step;
 window.stepVpBlackBars = vpBlackBarsSel.step;
 window.stepVpSpatialBlur = vpSpatialBlurSel.step;
@@ -196,7 +198,7 @@ function fitStatus() {
     const ratio = (column.clientHeight - padding) / body.offsetHeight;
     if (ratio < 1) body.style.zoom = String(Math.floor(ratio * 100) / 100);
 }
-const captureKeys = ['letterbox', 'vpHdr', 'vpBlackBars', 'vpSpatialBlur', 'levels', 'autostart'];
+const captureKeys = ['letterbox', 'vpEnabled', 'vpHdr', 'vpBlackBars', 'vpSpatialBlur', 'levels', 'autostart'];
 
 // LED layout: start corner and direction are saved together with the counts.
 const cornerLabels = { topleft: 'Top Left', topright: 'Top Right', bottomright: 'Bottom Right', bottomleft: 'Bottom Left' };
@@ -587,6 +589,8 @@ function onMessage(data) {
                 gammaSel.show(msg.error ? '1.0' : Number(msg.value).toFixed(1));
             } else if (msg.key === 'letterbox') {
                 letterboxSel.show(msg.error ? 'auto' : msg.value);
+            } else if (msg.key === 'vpEnabled') {
+                vpEnabledSel.show(msg.error ? 'off' : msg.value);
             } else if (msg.key === 'vpHdr') {
                 vpHdrSel.show(msg.error ? 'on' : msg.value);
             } else if (msg.key === 'vpBlackBars') {

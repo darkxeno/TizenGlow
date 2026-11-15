@@ -65,10 +65,11 @@ namespace TizenGlow
         private static int _consecutiveFailures;
         private static long _nextProbeTimestamp;
         private static bool _inFallback;
-        private static volatile string _status = "not initialized";
+        private static volatile string _status = "disabled";
         private static int _lastFallbackRc = int.MinValue;
 
-        // Configurable features (with sensible defaults and ability to disable each).
+        // Configurable features (VideoPlane capture is off by default; enable for TVs where secvideo_api_capture_video_main works).
+        private static volatile bool _enabled = false;
         private static volatile bool _hdrEnabled = true;
         private static volatile bool _blackBarsEnabled = true;
         private static volatile int _spatialBlurPercent = 25;
@@ -78,6 +79,7 @@ namespace TizenGlow
         private static int _candTop, _candBottom = PlaneH, _candLeft, _candRight = PlaneW;
         private static int _barHoldCount;
 
+        public static string EnabledSetting { get { return _enabled ? "on" : "off"; } }
         public static string HdrSetting { get { return _hdrEnabled ? "on" : "off"; } }
         public static string BlackBarsSetting { get { return _blackBarsEnabled ? "on" : "off"; } }
         public static int SpatialBlurSetting { get { return _spatialBlurPercent; } }
@@ -88,6 +90,25 @@ namespace TizenGlow
             if (_status == status) return;
             _status = status;
             if (logMessage != null) AppLog.Info("VideoPlane", logMessage);
+        }
+
+        public static bool TrySetEnabled(string value)
+        {
+            if (value != "on" && value != "off") return false;
+            bool next = (value == "on");
+            _enabled = next;
+            if (!next)
+            {
+                _inFallback = false;
+                _consecutiveFailures = 0;
+                _lastFallbackRc = int.MinValue;
+                SetStatus("disabled", "disabled");
+            }
+            else if (!_unavailable)
+            {
+                SetStatus(_call != null ? "ready" : "not initialized", "enabled");
+            }
+            return true;
         }
 
         public static bool TrySetHdr(string value)
@@ -118,7 +139,7 @@ namespace TizenGlow
             return true;
         }
 
-        public static bool IsActive { get { return _call != null && !_unavailable && !_inFallback; } }
+        public static bool IsActive { get { return _enabled && _call != null && !_unavailable && !_inFallback; } }
 
         private static bool EnsureInit()
         {
@@ -180,6 +201,7 @@ namespace TizenGlow
         public static bool TryCapturePoints(CapturePoint[] points, out Color[] colors)
         {
             colors = null;
+            if (!_enabled) return false;
             if (points == null || points.Length == 0) return false;
             if (!EnsureInit()) return false;
 

@@ -100,6 +100,7 @@ namespace TizenGlow.WebSocket
             if (Preference.Contains("nanoleafEdge")) Wled.TrySetNanoleafEdge(Preference.Get<string>("nanoleafEdge"));
             if (Preference.Contains("nanoleafRange")) Wled.TrySetNanoleafRange(Preference.Get<string>("nanoleafRange"));
             if (Preference.Contains("letterbox")) Letterbox.TrySetMode(Preference.Get<string>("letterbox"));
+            if (Preference.Contains("vpEnabled")) VideoPlaneCapturer.TrySetEnabled(Preference.Get<string>("vpEnabled"));
             if (Preference.Contains("vpHdr")) VideoPlaneCapturer.TrySetHdr(Preference.Get<string>("vpHdr"));
             if (Preference.Contains("vpBlackBars")) VideoPlaneCapturer.TrySetBlackBars(Preference.Get<string>("vpBlackBars"));
             if (Preference.Contains("vpSpatialBlur")) VideoPlaneCapturer.TrySetSpatialBlur(Preference.Get<string>("vpSpatialBlur"));
