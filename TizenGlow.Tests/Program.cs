@@ -426,9 +426,15 @@ internal static class Program
             var jsResp = http.GetAsync($"http://127.0.0.1:{port}/js/wsClient.js").GetAwaiter().GetResult();
             Assert(jsResp.StatusCode == HttpStatusCode.OK, $"Expected 200 for wsClient.js, got {jsResp.StatusCode}");
 
+            AppLog.Info("Test", "Hello from TizenGlow");
+            var logsResp = http.GetAsync($"http://127.0.0.1:{port}/logs").GetAwaiter().GetResult();
+            Assert(logsResp.StatusCode == HttpStatusCode.OK, $"Expected 200 for /logs, got {logsResp.StatusCode}");
+            string logsText = logsResp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            Assert(logsText.Contains("Hello from TizenGlow"), "Expected /logs to include AppLog entry");
+
             var missResp = http.GetAsync($"http://127.0.0.1:{port}/missing.txt").GetAwaiter().GetResult();
             Assert(missResp.StatusCode == HttpStatusCode.NotFound, $"Expected 404 for missing.txt, got {missResp.StatusCode}");
-            Console.WriteLine($"[Test] WebUiServer HTTP serving on port {port} OK");
+            Console.WriteLine($"[Test] WebUiServer HTTP serving + /logs on port {port} OK");
         }
         finally
         {

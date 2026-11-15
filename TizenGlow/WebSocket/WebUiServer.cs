@@ -62,6 +62,7 @@ namespace TizenGlow.WebSocket
         public async Task StartAsync(CancellationToken cancellationToken = default)
         {
             _listener.Start();
+            AppLog.Info("WebUiServer", "Listening for HTTP UI requests");
             using (cancellationToken.Register(() => { try { _listener.Stop(); } catch { } }))
             {
                 while (!cancellationToken.IsCancellationRequested)
@@ -79,8 +80,9 @@ namespace TizenGlow.WebSocket
                     {
                         break;
                     }
-                    catch (HttpListenerException)
+                    catch (HttpListenerException ex)
                     {
+                        AppLog.Error("WebUiServer", ex);
                         break;
                     }
                     _ = Task.Run(() => HandleRequestAsync(ctx));
@@ -98,6 +100,19 @@ namespace TizenGlow.WebSocket
         {
             try
             {
+                string path = (ctx.Request.RawUrl ?? "/").Split('?')[0].Trim();
+                if (string.Equals(path, "/logs", StringComparison.OrdinalIgnoreCase))
+                {
+                    byte[] body = System.Text.Encoding.UTF8.GetBytes(AppLog.Dump());
+                    ctx.Response.StatusCode = 200;
+                    ctx.Response.ContentType = "text/plain; charset=utf-8";
+                    ctx.Response.Headers["Cache-Control"] = "no-cache";
+                    ctx.Response.ContentLength64 = body.Length;
+                    await ctx.Response.OutputStream.WriteAsync(body, 0, body.Length);
+                    ctx.Response.OutputStream.Close();
+                    return;
+                }
+
                 string resourceName, contentType;
                 if (!TryResolveResource(ctx.Request.RawUrl, out resourceName, out contentType))
                 {
