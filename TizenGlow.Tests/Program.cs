@@ -12,6 +12,11 @@ internal static class Program
         TestNanoleafPacketCorrectness();
         TestWledTopRightRemap();
         TestNanoleafSenderZeroAllocBenchmark();
+        TestVideoPlaneSettingsValidation();
+        TestVideoPlaneSpatialBlur();
+        TestVideoPlaneHdrVsSdrSampling();
+        TestVideoPlaneBlackBarsDetectionAndDisable();
+        TestLetterboxStateMachine();
         Console.WriteLine("ALL TESTS PASSED.");
         return 0;
     }
@@ -157,5 +162,129 @@ internal static class Program
         Console.WriteLine($"[Perf] NanoleafSender.BuildPacket x{iterations:N0}: {elapsedMs:F2} ms ({nsPerFrame:F0} ns/frame, {fps:N0} frames/s), heap alloc={allocated} bytes");
 
         Assert(allocated == 0, $"Expected 0 bytes allocated in hot loop, got {allocated}");
+    }
+
+    private static void TestVideoPlaneSettingsValidation()
+    {
+        Assert(VideoPlaneCapturer.HdrSetting == "on", "Default vpHdr should be on");
+        Assert(VideoPlaneCapturer.BlackBarsSetting == "on", "Default vpBlackBars should be on");
+        Assert(VideoPlaneCapturer.SpatialBlurSetting == 25, "Default vpSpatialBlur should be 25");
+
+        Assert(!VideoPlaneCapturer.TrySetHdr("invalid"), "Invalid vpHdr should fail");
+        Assert(VideoPlaneCapturer.TrySetHdr("off") && VideoPlaneCapturer.HdrSetting == "off", "vpHdr off should succeed");
+        Assert(VideoPlaneCapturer.TrySetHdr("on") && VideoPlaneCapturer.HdrSetting == "on", "vpHdr on should succeed");
+
+        Assert(!VideoPlaneCapturer.TrySetBlackBars("auto"), "Invalid vpBlackBars should fail");
+        Assert(VideoPlaneCapturer.TrySetBlackBars("off") && VideoPlaneCapturer.BlackBarsSetting == "off", "vpBlackBars off should succeed");
+        Assert(VideoPlaneCapturer.TrySetBlackBars("on") && VideoPlaneCapturer.BlackBarsSetting == "on", "vpBlackBars on should succeed");
+
+        Assert(!VideoPlaneCapturer.TrySetSpatialBlur("-1"), "Negative spatial blur should fail");
+        Assert(!VideoPlaneCapturer.TrySetSpatialBlur("51"), "Spatial blur > 50 should fail");
+        Assert(!VideoPlaneCapturer.TrySetSpatialBlur("abc"), "Non-numeric spatial blur should fail");
+        Assert(VideoPlaneCapturer.TrySetSpatialBlur("0") && VideoPlaneCapturer.SpatialBlurSetting == 0, "Spatial blur 0 (off) should succeed");
+        Assert(VideoPlaneCapturer.TrySetSpatialBlur("25") && VideoPlaneCapturer.SpatialBlurSetting == 25, "Spatial blur 25 should succeed");
+    }
+
+    private static void TestVideoPlaneSpatialBlur()
+    {
+        var ring = new[]
+        {
+            new Color { R = 200, G = 0, B = 0 },
+            new Color { R = 0, G = 0, B = 0 },
+            new Color { R = 0, G = 0, B = 0 },
+            new Color { R = 0, G = 0, B = 0 }
+        };
+
+        // 0% leaves colors untouched
+        Assert(VideoPlaneCapturer.TrySetSpatialBlur("0"), "Set blur 0");
+        var untouched = (Color[])ring.Clone();
+        VideoPlaneCapturer.ApplySpatialBlur(untouched);
+        Assert(untouched[0].R == 200 && untouched[1].R == 0, "0% blur must not alter colors");
+
+        // 50% blends 50% self + 25% left + 25% right (wrapping around ring)
+        Assert(VideoPlaneCapturer.TrySetSpatialBlur("50"), "Set blur 50");
+        var blurred = (Color[])ring.Clone();
+        VideoPlaneCapturer.ApplySpatialBlur(blurred);
+        Assert(blurred[0].R == 100, $"Expected center 100, got {blurred[0].R}");
+        Assert(blurred[1].R == 50, $"Expected right neighbor 50, got {blurred[1].R}");
+        Assert(blurred[2].R == 0, $"Expected opposite 0, got {blurred[2].R}");
+        Assert(blurred[3].R == 50, $"Expected wrap-around left neighbor 50, got {blurred[3].R}");
+
+        Assert(VideoPlaneCapturer.TrySetSpatialBlur("25"), "Restore default blur 25");
+    }
+
+    private static void TestVideoPlaneHdrVsSdrSampling()
+    {
+        const int w = 960, h = 540;
+        var y = new byte[w * h];
+        var c = new byte[w * h / 2];
+
+        // Fill neutral grey (Y=128, U=128, V=128)
+        Array.Fill(y, (byte)128);
+        Array.Fill(c, (byte)128);
+
+        Assert(VideoPlaneCapturer.TrySetBlackBars("off"), "Disable black bars for color test");
+        var pt = new[] { new CapturePoint(0.5, 0.5) };
+
+        Assert(VideoPlaneCapturer.TrySetHdr("on"), "Enable HDR");
+        Color[] hdrNeutral = VideoPlaneCapturer.SamplePointsFromPlanes(y, c, w, h, w, w, pt);
+        Assert(hdrNeutral[0].R == hdrNeutral[0].G && hdrNeutral[0].G == hdrNeutral[0].B,
+            $"HDR neutral should have R==G==B, got {hdrNeutral[0]}");
+
+        Assert(VideoPlaneCapturer.TrySetHdr("off"), "Enable SDR");
+        Color[] sdrNeutral = VideoPlaneCapturer.SamplePointsFromPlanes(y, c, w, h, w, w, pt);
+        Assert(sdrNeutral[0].R == sdrNeutral[0].G && sdrNeutral[0].G == sdrNeutral[0].B,
+            $"SDR neutral should have R==G==B, got {sdrNeutral[0]}");
+
+        // Fill saturated red (Y=120, U=90, V=220)
+        Array.Fill(y, (byte)120);
+        for (int i = 0; i + 1 < c.Length; i += 2) { c[i] = 90; c[i + 1] = 220; }
+
+        Color[] sdrRed = VideoPlaneCapturer.SamplePointsFromPlanes(y, c, w, h, w, w, pt);
+        Assert(sdrRed[0].R > sdrRed[0].G && sdrRed[0].R > sdrRed[0].B, $"SDR red invalid: {sdrRed[0]}");
+
+        Assert(VideoPlaneCapturer.TrySetHdr("on"), "Restore HDR");
+        Color[] hdrRed = VideoPlaneCapturer.SamplePointsFromPlanes(y, c, w, h, w, w, pt);
+        Assert(hdrRed[0].R > hdrRed[0].G && hdrRed[0].R > hdrRed[0].B, $"HDR red invalid: {hdrRed[0]}");
+
+        Assert(VideoPlaneCapturer.TrySetBlackBars("on"), "Restore black bars");
+    }
+
+    private static void TestVideoPlaneBlackBarsDetectionAndDisable()
+    {
+        const int w = 960, h = 540;
+        var y = new byte[w * h];
+        var c = new byte[w * h / 2];
+
+        // 80px black letterbox bars top & bottom (Y=16), bright green active middle (Y=180, U=60, V=60)
+        for (int row = 0; row < h; row++)
+        {
+            byte luma = (row < 80 || row >= h - 80) ? (byte)16 : (byte)180;
+            Array.Fill(y, luma, row * w, w);
+        }
+        for (int i = 0; i + 1 < c.Length; i += 2) { c[i] = 60; c[i + 1] = 60; }
+
+        var pts = new[] { new CapturePoint(0.5, 0.05), new CapturePoint(0.5, 0.95) };
+
+        Assert(VideoPlaneCapturer.TrySetBlackBars("off"), "Disable black bars");
+        Color[] raw = VideoPlaneCapturer.SamplePointsFromPlanes(y, c, w, h, w, w, pts);
+        Assert(raw[0].G < 20 && raw[1].G < 20, $"With black bars off, expected dark edge, got {raw[0]} / {raw[1]}");
+
+        Assert(VideoPlaneCapturer.TrySetBlackBars("on"), "Enable black bars");
+        Color[] cropped = null;
+        for (int f = 0; f < 10; f++)
+        {
+            cropped = VideoPlaneCapturer.SamplePointsFromPlanes(y, c, w, h, w, w, pts);
+        }
+        Assert(cropped[0].G > 80 && cropped[1].G > 80,
+            $"With black bars on, expected edge remapped into green picture, got {cropped[0]} / {cropped[1]}");
+    }
+
+    private static void TestLetterboxStateMachine()
+    {
+        Assert(Letterbox.TrySetMode("off") && Letterbox.Mode == "off" && !Letterbox.Inset && Letterbox.State == "off", "Letterbox off failed");
+        Assert(Letterbox.TrySetMode("on") && Letterbox.Mode == "on" && Letterbox.Inset && Letterbox.State == "always", "Letterbox on failed");
+        Assert(Letterbox.TrySetMode("auto") && Letterbox.Mode == "auto" && !Letterbox.Inset && Letterbox.State == "watching", "Letterbox auto failed");
+        Assert(!Letterbox.TrySetMode("bogus"), "Invalid letterbox mode should be rejected");
     }
 }

@@ -212,15 +212,21 @@ namespace TizenGlow
             Marshal.Copy(_bufY, _y, 0, YBytes);
             Marshal.Copy(_bufC, _c, 0, CBytes);
 
+            colors = SamplePointsFromPlanes(_y, _c, w, h, yStride, cStride, points);
+            return true;
+        }
+
+        internal static Color[] SamplePointsFromPlanes(byte[] y, byte[] c, int w, int h, int yStride, int cStride, CapturePoint[] points)
+        {
             int activeLeft = 0, activeRight = w, activeTop = 0, activeBottom = h;
             if (_blackBarsEnabled)
             {
-                UpdateActiveArea(w, h, yStride, out activeLeft, out activeRight, out activeTop, out activeBottom);
+                UpdateActiveArea(y, w, h, yStride, out activeLeft, out activeRight, out activeTop, out activeBottom);
             }
             int activeW = Math.Max(1, activeRight - activeLeft);
             int activeH = Math.Max(1, activeBottom - activeTop);
 
-            colors = new Color[points.Length];
+            var colors = new Color[points.Length];
             int halfBoxX = Math.Max(4, w / 80);
             int halfBoxY = Math.Max(4, h / 45);
             const int sampleStep = 3;
@@ -245,9 +251,9 @@ namespace TizenGlow
                     for (int x = x0; x < x1; x += sampleStep)
                     {
                         int yi = yRow + x;
-                        if ((uint)yi < (uint)_y.Length)
+                        if ((uint)yi < (uint)y.Length)
                         {
-                            sy += _y[yi];
+                            sy += y[yi];
                             n++;
                         }
                     }
@@ -260,10 +266,10 @@ namespace TizenGlow
                     for (int cxCol = (x0 >> 1); cxCol <= ((x1 - 1) >> 1); cxCol += sampleStep)
                     {
                         int ci = cRow + (cxCol << 1);
-                        if ((uint)(ci + 1) < (uint)_c.Length)
+                        if ((uint)(ci + 1) < (uint)c.Length)
                         {
-                            su += _c[ci];
-                            sv += _c[ci + 1];
+                            su += c[ci];
+                            sv += c[ci + 1];
                             nc++;
                         }
                     }
@@ -281,7 +287,7 @@ namespace TizenGlow
                 colors[i] = new Color { R = r, G = g, B = b };
             }
 
-            return true;
+            return colors;
         }
 
         public static void ApplySpatialBlur(Color[] colors)
@@ -309,11 +315,11 @@ namespace TizenGlow
             Array.Copy(blurred, colors, n);
         }
 
-        private static void UpdateActiveArea(int w, int h, int yStride, out int left, out int right, out int top, out int bottom)
+        private static void UpdateActiveArea(byte[] y, int w, int h, int yStride, out int left, out int right, out int top, out int bottom)
         {
             int newTop, newBottom, newLeft, newRight;
-            DetectActiveAreaY(w, h, yStride, out newTop, out newBottom);
-            DetectActiveAreaX(w, h, yStride, out newLeft, out newRight);
+            DetectActiveAreaY(y, w, h, yStride, out newTop, out newBottom);
+            DetectActiveAreaX(y, w, h, yStride, out newLeft, out newRight);
 
             if (newTop == _candTop && newBottom == _candBottom && newLeft == _candLeft && newRight == _candRight)
             {
@@ -337,16 +343,16 @@ namespace TizenGlow
             right = Math.Max(left + 1, Math.Min(_activeRight, w));
         }
 
-        private static void DetectActiveAreaY(int w, int h, int yStride, out int yTop, out int yBottom)
+        private static void DetectActiveAreaY(byte[] y, int w, int h, int yStride, out int yTop, out int yBottom)
         {
             const int step = 8;
             int maxBar = h / 4;
             int t = 0;
-            while (t < maxBar && RowIsBar(t, w, yStride, step)) t++;
+            while (t < maxBar && RowIsBar(y, t, w, yStride, step)) t++;
             yTop = (t >= maxBar) ? 0 : t;
 
             int b = h - 1, run = 0;
-            while (run < maxBar && b > 0 && RowIsBar(b, w, yStride, step)) { b--; run++; }
+            while (run < maxBar && b > 0 && RowIsBar(y, b, w, yStride, step)) { b--; run++; }
             yBottom = (run >= maxBar) ? h : (b + 1);
 
             if (yBottom - yTop < h / 3) { yTop = 0; yBottom = h; }
@@ -354,16 +360,16 @@ namespace TizenGlow
             if (h - yBottom < MinBarPx) yBottom = h;
         }
 
-        private static void DetectActiveAreaX(int w, int h, int yStride, out int xLeft, out int xRight)
+        private static void DetectActiveAreaX(byte[] y, int w, int h, int yStride, out int xLeft, out int xRight)
         {
             const int step = 8;
             int maxBar = w / 4;
             int l = 0;
-            while (l < maxBar && ColIsBar(l, h, yStride, step)) l++;
+            while (l < maxBar && ColIsBar(y, l, h, yStride, step)) l++;
             xLeft = (l >= maxBar) ? 0 : l;
 
             int r = w - 1, run = 0;
-            while (run < maxBar && r > 0 && ColIsBar(r, h, yStride, step)) { r--; run++; }
+            while (run < maxBar && r > 0 && ColIsBar(y, r, h, yStride, step)) { r--; run++; }
             xRight = (run >= maxBar) ? w : (r + 1);
 
             if (xRight - xLeft < w / 3) { xLeft = 0; xRight = w; }
@@ -371,27 +377,27 @@ namespace TizenGlow
             if (w - xRight < MinBarPx) xRight = w;
         }
 
-        private static bool RowIsBar(int row, int w, int yStride, int step)
+        private static bool RowIsBar(byte[] y, int row, int w, int yStride, int step)
         {
             int baseIdx = row * yStride;
-            if (baseIdx < 0 || baseIdx + w > _y.Length) return false;
+            if (baseIdx < 0 || baseIdx + w > y.Length) return false;
             int dark = 0, cnt = 0;
             for (int x = 0; x < w; x += step)
             {
-                if (_y[baseIdx + x] < BarThresh) dark++;
+                if (y[baseIdx + x] < BarThresh) dark++;
                 cnt++;
             }
             return cnt > 0 && dark == cnt;
         }
 
-        private static bool ColIsBar(int col, int h, int yStride, int step)
+        private static bool ColIsBar(byte[] y, int col, int h, int yStride, int step)
         {
             int dark = 0, cnt = 0;
             for (int row = 0; row < h; row += step)
             {
                 int idx = row * yStride + col;
-                if ((uint)idx >= (uint)_y.Length) return false;
-                if (_y[idx] < BarThresh) dark++;
+                if ((uint)idx >= (uint)y.Length) return false;
+                if (y[idx] < BarThresh) dark++;
                 cnt++;
             }
             return cnt > 0 && dark == cnt;
