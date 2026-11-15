@@ -69,6 +69,8 @@ namespace TizenGlow
             return bars == Bars ? this : new PointSet(PerEdge[0], PerEdge[1], PerEdge[2], PerEdge[3], bars, Inset);
         }
 
+        private readonly PointSet[] _activeEdgeCache = new PointSet[16];
+
         /// <summary>Returns a PointSet keeping only edges with LEDs; avoids wasting capture rounds on 0-LED edges.</summary>
         public PointSet ForActiveEdges(bool top, bool right, bool bottom, bool left)
         {
@@ -78,7 +80,14 @@ namespace TizenGlow
             int l = left ? PerEdge[3] : 0;
             if (t + r + b + l == 0) return this;
             if (t == PerEdge[0] && r == PerEdge[1] && b == PerEdge[2] && l == PerEdge[3]) return this;
-            return new PointSet(t, r, b, l, Bars, Inset);
+            int mask = (top ? 8 : 0) | (right ? 4 : 0) | (bottom ? 2 : 0) | (left ? 1 : 0);
+            PointSet cached = _activeEdgeCache[mask];
+            if (cached == null)
+            {
+                cached = new PointSet(t, r, b, l, Bars, Inset);
+                _activeEdgeCache[mask] = cached;
+            }
+            return cached;
         }
 
         /// <summary>"2/2/2/2": points on the top, right, bottom and left edges.</summary>

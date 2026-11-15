@@ -58,19 +58,35 @@ internal static class Program
         Assert(before.Count == 14, $"Expected 14 points before, got {before.Count}");
         Assert(after.Count == 7, $"Expected 7 points after, got {after.Count}");
         Assert(after.Describe() == "4/3/0/0", $"Expected 4/3/0/0, got {after.Describe()}");
+        Assert(ReferenceEquals(after, before.ForActiveEdges(top: true, right: true, bottom: false, left: false)), "Expected ForActiveEdges to return cached PointSet instance");
         Assert(afterFps > beforeFps, "Expected higher ceiling FPS after active-edge filtering");
-        Assert(CaptureMode.Detailed.TargetFps == 15, $"Expected original Detailed TargetFps == 15, got {CaptureMode.Detailed.TargetFps}");
+        Assert(CaptureMode.Detailed.TargetFps == 30, $"Expected Detailed TargetFps == 30, got {CaptureMode.Detailed.TargetFps}");
+        Assert(CaptureMode.BalancedPro.TargetFps == 30, $"Expected BalancedPro TargetFps == 30, got {CaptureMode.BalancedPro.TargetFps}");
         Assert(CaptureMode.Optimized.TargetFps == 20, $"Expected Optimized TargetFps == 20, got {CaptureMode.Optimized.TargetFps}");
         Assert(CaptureMode.Find("optimized") == CaptureMode.Optimized, "Expected CaptureMode.Find(\"optimized\") to return Optimized");
+        Assert(CaptureMode.Find("balancedpro") == CaptureMode.BalancedPro, "Expected CaptureMode.Find(\"balancedpro\") to return BalancedPro");
     }
 
     private static void TestCinemaMode()
     {
         CaptureMode cinema = CaptureMode.Cinema;
         Assert(cinema != null, "Expected CaptureMode.Cinema to be defined");
+        Assert(cinema.TargetFps == 30, $"Expected Cinema TargetFps 30, got {cinema.TargetFps}");
         Assert(Math.Abs(cinema.Points.Inset - 0.20) < 1e-6, $"Expected Cinema Inset 0.20, got {cinema.Points.Inset}");
         Assert(cinema.SmoothingMs == 1500, $"Expected Cinema SmoothingMs 1500, got {cinema.SmoothingMs}");
         Assert(CaptureMode.Find("cinema") == cinema, "Expected CaptureMode.Find(\"cinema\") to return Cinema");
+
+        CaptureMode balancedPro = CaptureMode.BalancedPro;
+        Assert(balancedPro != null, "Expected CaptureMode.BalancedPro to be defined");
+        Assert(Math.Abs(balancedPro.Points.Inset - 0.10) < 1e-6, $"Expected BalancedPro Inset 0.10, got {balancedPro.Points.Inset}");
+        Assert(balancedPro.SmoothingMs == 350, $"Expected BalancedPro SmoothingMs 350, got {balancedPro.SmoothingMs}");
+
+        CaptureMode cinemaPro = CaptureMode.CinemaPro;
+        Assert(cinemaPro != null, "Expected CaptureMode.CinemaPro to be defined");
+        Assert(cinemaPro.TargetFps == 30, $"Expected CinemaPro TargetFps 30, got {cinemaPro.TargetFps}");
+        Assert(cinemaPro.Points.Describe() == "1/1/1/1", $"Expected CinemaPro 1/1/1/1 points, got {cinemaPro.Points.Describe()}");
+        Assert( cinemaPro.EffectivePoints.Describe() == "1/1/1/1", $"Expected CinemaPro EffectivePoints 1/1/1/1, got {cinemaPro.EffectivePoints.Describe()}");
+        Assert(CaptureMode.Find("pro_cinema") == cinemaPro && CaptureMode.Find("cinemapro") == cinemaPro, "Expected CaptureMode.Find(\"pro_cinema\"/\"cinemapro\") to return CinemaPro");
 
         PointSet filtered = cinema.Points.ForActiveEdges(top: true, right: true, bottom: false, left: false);
         Assert(filtered.Count == 4, $"Expected 4 active points for Cinema, got {filtered.Count}");
@@ -489,6 +505,13 @@ internal static class Program
         sender.SendTo(pkt, target);
         Thread.Sleep(15);
 
+        Assert(TgvpUdpReceiver.IsActive, "Expected TgvpUdpReceiver.IsActive to be true after valid TGVP packet");
+        Assert(CaptureMode.Detailed.EffectivePoints.Describe() == "7/5/7/5", $"Expected Detailed EffectivePoints 7/5/7/5 when UDP active, got {CaptureMode.Detailed.EffectivePoints.Describe()}");
+        Assert(CaptureMode.BalancedPro.EffectivePoints.Describe() == "7/5/7/5", $"Expected BalancedPro EffectivePoints 7/5/7/5 when UDP active, got {CaptureMode.BalancedPro.EffectivePoints.Describe()}");
+        Assert(CaptureMode.Cinema.EffectivePoints.Describe() == "7/5/7/5", $"Expected Cinema EffectivePoints 7/5/7/5 when UDP active, got {CaptureMode.Cinema.EffectivePoints.Describe()}");
+        PointSet active3Edge = CaptureMode.Cinema.EffectivePoints.ForActiveEdges(true, true, true, false);
+        Assert(active3Edge.Describe() == "7/5/7/0" && active3Edge.Count == 19, $"Expected 19 active zones (7/5/7/0) on 3-edge layout, got {active3Edge.Count} ({active3Edge.Describe()})");
+
         Assert(TgvpUdpReceiver.TryGetColors(pts, out colors) && colors != null && colors.Length == 4,
             "Expected TryGetColors to succeed after valid TGVP packet");
         Assert(TgvpUdpReceiver.Status == $"active (TGVP UDP :{boundPort}, 24 pts)",
@@ -501,6 +524,8 @@ internal static class Program
 
         // 3. Stale timeout transitions to fallback status
         Thread.Sleep(160);
+        Assert(!TgvpUdpReceiver.IsActive, "Expected TgvpUdpReceiver.IsActive to be false after stale timeout");
+        Assert(CaptureMode.Cinema.EffectivePoints.Describe() == "2/2/2/2", $"Expected Cinema EffectivePoints fallback 2/2/2/2 after timeout, got {CaptureMode.Cinema.EffectivePoints.Describe()}");
         Assert(!TgvpUdpReceiver.TryGetColors(pts, out colors), "Expected false after stale timeout");
         Assert(TgvpUdpReceiver.Status == $"stale (TGVP UDP :{boundPort} -> fallback)",
             $"Expected stale status, got '{TgvpUdpReceiver.Status}'");

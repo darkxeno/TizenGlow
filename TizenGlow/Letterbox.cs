@@ -51,15 +51,17 @@ namespace TizenGlow
         /// <summary>The point set to capture with now. probe is true for a frame that checks the edge rows while bars are detected.</summary>
         public static PointSet Choose(CaptureMode mode, double now, out bool probe)
         {
+            PointSet pts = mode.EffectivePoints;
+            PointSet barsPts = mode.EffectiveBarsPoints;
             probe = false;
-            if (_mode == "on") return mode.BarsPoints;
-            if (_mode != "auto" || !_detected) return mode.Points;
+            if (_mode == "on") return barsPts;
+            if (_mode != "auto" || !_detected) return pts;
             lock (_lock)
             {
-                if (now - _lastProbe < ProbeMs) return mode.BarsPoints;
+                if (now - _lastProbe < ProbeMs) return barsPts;
                 _lastProbe = now;
                 probe = true;
-                return mode.Points;
+                return pts;
             }
         }
 
@@ -93,7 +95,7 @@ namespace TizenGlow
                         foreach (int i in used.Edges[0]) colors[i] = _lastFrame[i];
                         foreach (int i in used.Edges[2]) colors[i] = _lastFrame[i];
                     }
-                    return mode.BarsPoints;
+                    return mode.EffectiveBarsPoints;
                 }
                 if (_detected)
                 {

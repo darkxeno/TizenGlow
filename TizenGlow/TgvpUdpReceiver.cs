@@ -125,31 +125,49 @@ namespace TizenGlow
             }
         }
 
+        public static bool IsActive
+        {
+            get
+            {
+                if (!EnsureInit()) return false;
+                lock (_lock)
+                {
+                    DrainPackets();
+                    if (_latestCount <= 0 || _lastPacketTicks == 0) return false;
+                    long ageMs = (Stopwatch.GetTimestamp() - _lastPacketTicks) * 1000L / Stopwatch.Frequency;
+                    return ageMs <= _staleTimeoutMs;
+                }
+            }
+        }
+
         public static bool TryGetColors(CapturePoint[] points, out Color[] colors)
         {
             colors = null;
             if (points == null || points.Length == 0) return false;
             if (!EnsureInit()) return false;
 
-            DrainPackets();
-
-            int port = BoundPort;
-            if (_latestCount <= 0 || _lastPacketTicks == 0)
+            lock (_lock)
             {
-                _status = "waiting (TGVP UDP :" + port + ")";
-                return false;
-            }
+                DrainPackets();
 
-            long ageMs = (Stopwatch.GetTimestamp() - _lastPacketTicks) * 1000L / Stopwatch.Frequency;
-            if (ageMs > _staleTimeoutMs)
-            {
-                _status = "stale (TGVP UDP :" + port + " -> fallback)";
-                return false;
-            }
+                int port = BoundPort;
+                if (_latestCount <= 0 || _lastPacketTicks == 0)
+                {
+                    _status = "waiting (TGVP UDP :" + port + ")";
+                    return false;
+                }
 
-            _status = "active (TGVP UDP :" + port + ", " + _latestCount + " pts)";
-            colors = MapPerimeterToPoints(_latestRgb, _latestCount, points);
-            return true;
+                long ageMs = (Stopwatch.GetTimestamp() - _lastPacketTicks) * 1000L / Stopwatch.Frequency;
+                if (ageMs > _staleTimeoutMs)
+                {
+                    _status = "stale (TGVP UDP :" + port + " -> fallback)";
+                    return false;
+                }
+
+                _status = "active (TGVP UDP :" + port + ", " + _latestCount + " pts)";
+                colors = MapPerimeterToPoints(_latestRgb, _latestCount, points);
+                return true;
+            }
         }
 
         internal static Color[] MapPerimeterToPoints(byte[] rgb, int count, CapturePoint[] points)
@@ -215,6 +233,25 @@ namespace TizenGlow
                     segStart = leftStart;
                     segCount = leftCount;
                     t = 1.0 - y;
+                }
+
+                if (points.Length <= 4 && segCount > 1)
+                {
+                    int sumR = 0, sumG = 0, sumB = 0;
+                    for (int k = 0; k < segCount; k++)
+                    {
+                        int o = (segStart + k) * 3;
+                        sumR += rgb[o];
+                        sumG += rgb[o + 1];
+                        sumB += rgb[o + 2];
+                    }
+                    result[i] = new Color
+                    {
+                        R = (int)Math.Round((double)sumR / segCount),
+                        G = (int)Math.Round((double)sumG / segCount),
+                        B = (int)Math.Round((double)sumB / segCount)
+                    };
+                    continue;
                 }
 
                 double pos = t * segCount - 0.5;

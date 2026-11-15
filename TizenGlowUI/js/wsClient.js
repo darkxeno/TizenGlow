@@ -1,5 +1,5 @@
 // This page's version. Must equal tizen-manifest.xml and package.json; the release workflow checks.
-const uiVersion = '1.4.5';
+const uiVersion = '1.4.6';
 // Oldest service (TPK) this page works with. Raise it only when the page needs something new from the
 // service; a page-only release leaves it, and that release's TPK is then optional.
 const minService = '1.4.2'; // standalone WebUI + io.gh.darkxeno.TizenGlow
@@ -93,18 +93,19 @@ window.stepTargetFps = (step, wrap) => {
 }
 
 // Must match CaptureMode.cs ("smooth" was the old name of the 14-point mode).
-const captureModes = ['fast', 'balanced', 'detailed', 'optimized', 'cinema'];
-const captureModeLabels = { fast: 'Fast', balanced: 'Balanced', detailed: 'Detailed', optimized: 'Optimized', cinema: 'Cinema' };
+const captureModes = ['fast', 'balanced', 'detailed', 'balancedpro', 'optimized', 'cinema', 'pro_cinema'];
+const captureModeLabels = { fast: 'Fast', balanced: 'Balanced', detailed: 'Detailed', balancedpro: 'BalancedPRO', optimized: 'Optimized', cinema: 'Cinema', pro_cinema: 'CinemaPRO' };
 let captureMode = 'balanced';
 
 function showCaptureMode(mode) {
     if (mode === 'smooth') mode = 'detailed';
+    if (mode === 'cinemapro') mode = 'pro_cinema';
     captureMode = captureModes.indexOf(mode) !== -1 ? mode : 'balanced';
     document.getElementById('captureMode').innerHTML = 'Capture: ' + captureModes
         .map(m => m === captureMode ? `<span class="active">${captureModeLabels[m]}</span>` : captureModeLabels[m]).join(' | ');
 }
 
-// Same keys as Target FPS. A mode also sets its own target FPS, so read that back.
+// Same keys as Target FPS. A mode also sets its own target FPS (and CinemaPRO sets brightness/gamma), so read them back.
 window.stepCaptureMode = (step, wrap) => {
     if (!connected()) return;
     const next = stepIn(captureModes, captureMode, step, wrap);
@@ -112,6 +113,8 @@ window.stepCaptureMode = (step, wrap) => {
     showCaptureMode(next);
     send({ event: events.SetConfig, key: 'captureMode', value: next });
     send({ event: events.ReadConfig, key: 'targetFps' });
+    send({ event: events.ReadConfig, key: 'wledBrightness' });
+    send({ event: events.ReadConfig, key: 'wledGamma' });
 }
 
 // One-button selector: OK cycles (wrapping), Left/Right step. With a key the choice is sent at once;

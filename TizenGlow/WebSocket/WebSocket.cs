@@ -202,12 +202,28 @@ namespace TizenGlow.WebSocket
                     }
                 case "captureMode":
                     {
-                        // fast / balanced / detailed, picked up by the running loop on its next frame. The
-                        // mode also sets the target FPS; save that too so both survive a restart. Saved
-                        // under the mode's own name ("smooth" is still accepted for Detailed).
+                        // fast / balanced / detailed / balancedpro / optimized / cinema / pro_cinema, picked up by
+                        // the running loop on its next frame. The mode also sets the target FPS; save that too.
+                        CaptureMode prevMode = HyperionClient.Mode;
                         if (!HyperionClient.TrySetMode(setConfigEvent.value)) return;
                         Preference.Set("targetFps", HyperionClient.TargetFps.ToString());
                         Preference.Set("captureMode", HyperionClient.Mode.Name);
+                        if (HyperionClient.Mode == CaptureMode.CinemaPro)
+                        {
+                            if (App.client != null && App.client.Wled != null)
+                            {
+                                App.client.Wled.TrySetBrightness("30");
+                                App.client.Wled.TrySetGamma("2.0");
+                            }
+                            Preference.Set("wledBrightness", "30");
+                            Preference.Set("wledGamma", "2.0");
+                        }
+                        else if (prevMode == CaptureMode.CinemaPro && Preference.Contains("wledBrightness") && Preference.Get<string>("wledBrightness") == "30")
+                        {
+                            if (App.client != null && App.client.Wled != null)
+                                App.client.Wled.TrySetBrightness("100");
+                            Preference.Set("wledBrightness", "100");
+                        }
                         return;
                     }
                 // WLED Direct. Every value is validated by the output; anything invalid is ignored and not saved.

@@ -26,7 +26,7 @@
             <section class="card">
                 <h2>Capture</h2>
                 <label class="toggle" for="enabled"><input type="checkbox" id="enabled"><span>Capture enabled</span></label>
-                <button id="captureMode" data-step="stepCaptureMode" onclick="stepCaptureMode(1, true)">Capture: Fast | <span class="active">Balanced</span> | Detailed | Optimized | Cinema</button>
+                <button id="captureMode" data-step="stepCaptureMode" onclick="stepCaptureMode(1, true)">Capture: Fast | <span class="active">Balanced</span> | Detailed | BalancedPRO | Optimized | Cinema | CinemaPRO</button>
                 <button id="targetFps" data-step="stepTargetFps" onclick="stepTargetFps(1, true)">Target FPS: &lt; 15 &gt;</button>
                 <button id="letterbox" data-step="stepLetterbox" onclick="stepLetterbox(1, true)">Black bars: &lt; Auto &gt;</button>
                 <button id="vpEnabled" data-step="stepVpEnabled" onclick="stepVpEnabled(1, true)">VideoPlane: &lt; Off &gt;</button>
@@ -34,7 +34,7 @@
                 <button id="vpBlackBars" data-step="stepVpBlackBars" onclick="stepVpBlackBars(1, true)">VideoPlane bars: &lt; On &gt;</button>
                 <button id="vpSpatialBlur" data-step="stepVpSpatialBlur" onclick="stepVpSpatialBlur(1, true)">Spatial blur: &lt; 25% &gt;</button>
                 <button id="autostart" data-step="stepAutostart" onclick="stepAutostart(1, true)">Start with the TV: &lt; On &gt;</button>
-                <p class="hint">Fast samples 6 points, Balanced 8, Detailed 14: fewer points, faster frames (the TV waits after every 2). Black bars: Auto moves the top and bottom samples into the picture when a film is letterboxed. Start with the TV: after a restart or power cut, the service starts again by itself within 10 minutes, without opening TizenBrew. OK cycles a setting, LEFT / RIGHT step through it.</p>
+                <p class="hint">Fast samples 6 points, Balanced 8, Detailed/BalancedPRO/Cinema use all 24 zones at 30 FPS when TGVP UDP is active. CinemaPRO uses 1 uniform colour per edge (Top/Right/Bottom/Left) with 30% brightness, Gamma 2.0 and ultra-slow transitions for minimum distraction.</p>
             </section>
 
             <section class="card">

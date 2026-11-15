@@ -16,6 +16,13 @@ namespace TizenGlow
         /// <summary>The points a frame samples, and the same with the rows moved in for black bars.</summary>
         public PointSet Points, BarsPoints;
 
+        /// <summary>Full 24-zone (7/5/7/5) point set used when external TGVP UDP capture (vp_bridge) is active.</summary>
+        public PointSet UdpPoints;
+
+        /// <summary>Effective point set for the current capture source (24-zone UDP when active, else cs_ve points).</summary>
+        public PointSet EffectivePoints { get { return TgvpUdpReceiver.IsActive && UdpPoints != null ? UdpPoints : Points; } }
+        public PointSet EffectiveBarsPoints { get { return TgvpUdpReceiver.IsActive && UdpPoints != null ? UdpPoints : BarsPoints; } }
+
         /// <summary>Target FPS applied when the mode is picked; the Target FPS setting can still fine-tune it.</summary>
         public int TargetFps;
 
@@ -38,20 +45,25 @@ namespace TizenGlow
         /// </summary>
         public int SmoothingMs;
 
+        private static readonly PointSet FullUdpPoints = new PointSet(7, 5, 7, 5, 0, PointSet.EdgeInset);
+
         public static readonly CaptureMode Fast = Make("fast", "Fast", 2, 1, 2, 1, 20, 1000, 5000, 60);
         public static readonly CaptureMode Balanced = Make("balanced", "Balanced", 2, 2, 2, 2, 15, 5000, 10000, 100);
-        public static readonly CaptureMode Detailed = Make("detailed", "Detailed", 4, 3, 4, 3, 15, 5000, 10000, 150);
-        public static readonly CaptureMode Optimized = Make("optimized", "Optimized", 4, 3, 4, 3, 20, 5000, 10000, 150);
-        public static readonly CaptureMode Cinema = Make("cinema", "Cinema", 2, 2, 2, 2, 15, 5000, 10000, 1500, 0.20);
+        public static readonly CaptureMode Detailed = Make("detailed", "Detailed", 4, 3, 4, 3, 30, 5000, 10000, 150, PointSet.EdgeInset, true);
+        public static readonly CaptureMode BalancedPro = Make("balancedpro", "BalancedPRO", 4, 3, 4, 3, 30, 5000, 10000, 350, 0.10, true);
+        public static readonly CaptureMode Optimized = Make("optimized", "Optimized", 4, 3, 4, 3, 20, 5000, 10000, 150, PointSet.EdgeInset, true);
+        public static readonly CaptureMode Cinema = Make("cinema", "Cinema", 2, 2, 2, 2, 30, 5000, 10000, 1500, 0.20, true);
+        public static readonly CaptureMode CinemaPro = Make("pro_cinema", "CinemaPRO", 1, 1, 1, 1, 30, 5000, 10000, 2500, 0.24, false);
 
-        public static readonly CaptureMode[] All = { Fast, Balanced, Detailed, Optimized, Cinema };
+        public static readonly CaptureMode[] All = { Fast, Balanced, Detailed, BalancedPro, Optimized, Cinema, CinemaPro };
 
-        private static CaptureMode Make(string name, string label, int top, int right, int bottom, int left, int fps, int backoff, int retry, int smoothing, double inset = PointSet.EdgeInset)
+        private static CaptureMode Make(string name, string label, int top, int right, int bottom, int left, int fps, int backoff, int retry, int smoothing, double inset = PointSet.EdgeInset, bool useAllUdpZones = false)
         {
             var points = new PointSet(top, right, bottom, left, 0, inset);
             return new CaptureMode
             {
                 Name = name, Label = label, Points = points, BarsPoints = points.WithBars(Letterbox.BarHeight),
+                UdpPoints = useAllUdpZones ? FullUdpPoints : null,
                 TargetFps = fps, KeepFrameGrid = false, ErrorBackoffMs = backoff, ConditionRetryMs = retry, SmoothingMs = smoothing,
             };
         }
@@ -60,6 +72,7 @@ namespace TizenGlow
         public static CaptureMode Find(string name)
         {
             if (name == "smooth") return Detailed;
+            if (name == "cinemapro") return CinemaPro;
             foreach (CaptureMode mode in All) if (mode.Name == name) return mode;
             return null;
         }
