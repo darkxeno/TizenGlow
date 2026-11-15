@@ -256,13 +256,18 @@ internal static class Program
         var y = new byte[w * h];
         var c = new byte[w * h / 2];
 
-        // 80px black letterbox bars top & bottom (Y=16), bright green active middle (Y=180, U=60, V=60)
+        // 80px black letterbox bars top & bottom (Y=16, U=128, V=128), bright green active middle (Y=180, U=60, V=60)
         for (int row = 0; row < h; row++)
         {
             byte luma = (row < 80 || row >= h - 80) ? (byte)16 : (byte)180;
             Array.Fill(y, luma, row * w, w);
         }
-        for (int i = 0; i + 1 < c.Length; i += 2) { c[i] = 60; c[i + 1] = 60; }
+        for (int crow = 0; crow < h / 2; crow++)
+        {
+            int yRow = crow * 2;
+            byte chroma = (yRow < 80 || yRow >= h - 80) ? (byte)128 : (byte)60;
+            Array.Fill(c, chroma, crow * w, w);
+        }
 
         var pts = new[] { new CapturePoint(0.5, 0.05), new CapturePoint(0.5, 0.95) };
 
