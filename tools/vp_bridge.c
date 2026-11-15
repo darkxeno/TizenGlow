@@ -366,7 +366,7 @@ static inline void yuv_to_rgb(int y_avg, int u_avg, int v_avg,
     if (c_val < 0) c_val = 0;
 
     int r, g, b;
-    if (use_hdr) {
+    if (use_hdr == 1) {
         /* BT.2020 limited-range integer approximation */
         r = (298 * c_val + 430 * v_avg + 128) >> 8;
         g = (298 * c_val - 48 * u_avg - 167 * v_avg + 128) >> 8;
@@ -387,7 +387,7 @@ static inline void yuv_to_rgb(int y_avg, int u_avg, int v_avg,
 
     float rf, gf, bf;
 
-    if (use_hdr) {
+    if (use_hdr == 1) {
         /* 1. Decode each PQ primary R', G', B' to true linear nits */
         float rl = pq_nits_lut[ru];
         float gl = pq_nits_lut[gu];
@@ -405,6 +405,11 @@ static inline void yuv_to_rgb(int y_avg, int u_avg, int v_avg,
         rf = tone_map_linear_nits(r7);
         gf = tone_map_linear_nits(g7);
         bf = tone_map_linear_nits(b7);
+    } else if (use_hdr == 2) {
+        /* TrustZone DRM scaler already tone-mapped HDR; apply gamma 1/2.0 (sqrtf) to pair with WledOutput gamma 2.0 */
+        rf = 255.0f * sqrtf((float)ru / 255.0f);
+        gf = 255.0f * sqrtf((float)gu / 255.0f);
+        bf = 255.0f * sqrtf((float)bu / 255.0f);
     } else {
         rf = (float)ru;
         gf = (float)gu;
@@ -575,6 +580,11 @@ static void print_usage(const char *prog) {
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
+
+    if (geteuid() == 0) {
+        (void)setuid(0);
+        (void)setgid(0);
+    }
 
     if (getenv("TZCAPTURE_SPOOFED") == NULL) {
         setenv("TZCAPTURE_SPOOFED", "1", 1);
@@ -901,7 +911,7 @@ int main(int argc, char **argv) {
                                      active_top, active_bottom,
                                      &g_profiles[cur_prof],
                                      is_nv21, use_bt601,
-                                     use_tz ? 0 : use_hdr, pq_nits_lut,
+                                     use_tz ? (use_hdr ? 2 : 0) : use_hdr, pq_nits_lut,
                                      points, point_count,
                                      s1_rgb, s2_rgb, out_f_rgb,
                                      &filter_init, pkt.rgb);
