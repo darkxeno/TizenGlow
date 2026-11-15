@@ -291,7 +291,7 @@
             fetch('http://127.0.0.1:8081').then(res => res.text()).then(ip => {
                 deviceIP = ip;
 
-                const testWS = new WebSocket(`ws://${ip}:8086`);
+                const testWS = new WebSocket(`ws://${ip}:8091`);
 
                 testWS.onopen = function () {
                     testWS.close();

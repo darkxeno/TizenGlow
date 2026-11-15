@@ -12,7 +12,7 @@ let canEnable = false;
 
 function open() {
     clearTimeout(reconnectTimer);
-    client = new WebSocket(`ws://${deviceIP}:8086`);
+    client = new WebSocket(`ws://${deviceIP}:8091`);
     client.onopen = onOpen;
     client.onmessage = onMessage;
     client.onclose = client.onerror = () => {

@@ -356,7 +356,7 @@ namespace TizenGlow.WebSocket
     {
         public static async Task StartServerAsync()
         {
-            var wsServer = new WSServer("http://+:8086/");
+            var wsServer = new WSServer("http://+:8091/");
             await wsServer.StartAsync();
         }
     }
