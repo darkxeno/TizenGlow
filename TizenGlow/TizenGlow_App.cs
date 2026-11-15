@@ -12,15 +12,21 @@ namespace TizenGlow
         protected override void OnCreate()
         {
             base.OnCreate();
+            System.AppDomain.CurrentDomain.UnhandledException += (s, e) =>
+            {
+                if (e.ExceptionObject is System.Exception ex) AppLog.Error("AppDomain", ex);
+            };
+            AppLog.Info("App", "Service OnCreate starting");
             if (!Preference.Contains("enabled")) Preference.Set("enabled", "false");
-            Task.Run(() => WebSocketServer.StartServerAsync());
-            Task.Run(() => new WebUiServer().StartAsync());
+            Task.Run(() => { try { WebSocketServer.StartServerAsync().Wait(); } catch (System.Exception ex) { AppLog.Error("WebSocketServer", ex); } });
+            Task.Run(() => { try { new WebUiServer().StartAsync().Wait(); } catch (System.Exception ex) { AppLog.Error("WebUiServer", ex); } });
             Display.StateChanged += Display_StateChanged;
             Capturer.Probe(); // publish detectedApi / captureState even while capture is disabled
             // Started by the autostart alarm while the TV is in standby: wait for the screen to come on
             // (Display_StateChanged turns capture on then) instead of capturing a dark panel.
             try { if (Display.State == DisplayState.Off) Configuration.Enabled = false; } catch { }
             client = new HyperionClient();
+            AppLog.Info("App", "Service OnCreate ready");
         }
 
         private void Display_StateChanged(object sender, DisplayStateChangedEventArgs e)
