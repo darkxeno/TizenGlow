@@ -20,6 +20,8 @@
 #define PLANE_H 540
 #define Y_BYTES (PLANE_W * PLANE_H)
 #define C_BYTES (Y_BYTES / 2)
+#define TZ_MAX_PIXELS (512 * 1024)
+#define TZ_CAPTURE_STRUCT_SIZE 256
 #define PARAM_BYTES 256
 #define MAX_POINTS 255
 
@@ -31,6 +33,22 @@
 #define PREF_HDR_PATH  "/opt/usr/home/owner/apps_rw/io.gh.darkxeno.TizenGlow/data/.pref/b6760485373316095adc098b38e886b6b08eed39"
 
 typedef int (*fn_secvideo_t)(int reqW, int reqH, void *param);
+
+typedef struct {
+    void *pYAddr;
+    void *pCAddr;
+    uint32_t out_8;
+    uint32_t out_12;
+    uint32_t width;
+    uint32_t height;
+    uint32_t out_24;
+    uint32_t out_28;
+    uint32_t cmd_id;
+} tzcapture_param_t;
+
+typedef int (*fn_tz_init_t)(void *tzc);
+typedef int (*fn_tz_capture_t)(void *tzc, tzcapture_param_t *param);
+typedef int (*fn_tz_finalize_t)(void *tzc);
 
 typedef struct __attribute__((packed)) {
     char magic[4];
@@ -348,7 +366,7 @@ static inline void yuv_to_rgb(int y_avg, int u_avg, int v_avg,
     if (c_val < 0) c_val = 0;
 
     int r, g, b;
-    if (use_hdr) {
+    if (use_hdr == 1) {
         /* BT.2020 limited-range integer approximation */
         r = (298 * c_val + 430 * v_avg + 128) >> 8;
         g = (298 * c_val - 48 * u_avg - 167 * v_avg + 128) >> 8;
@@ -369,7 +387,7 @@ static inline void yuv_to_rgb(int y_avg, int u_avg, int v_avg,
 
     float rf, gf, bf;
 
-    if (use_hdr) {
+    if (use_hdr == 1) {
         /* 1. Decode each PQ primary R', G', B' to true linear nits */
         float rl = pq_nits_lut[ru];
         float gl = pq_nits_lut[gu];
@@ -387,6 +405,11 @@ static inline void yuv_to_rgb(int y_avg, int u_avg, int v_avg,
         rf = tone_map_linear_nits(r7);
         gf = tone_map_linear_nits(g7);
         bf = tone_map_linear_nits(b7);
+    } else if (use_hdr == 2) {
+        /* TrustZone DRM scaler already tone-mapped HDR; apply gamma 1/2.0 (sqrtf) to pair with WledOutput gamma 2.0 */
+        rf = 255.0f * sqrtf((float)ru / 255.0f);
+        gf = 255.0f * sqrtf((float)gu / 255.0f);
+        bf = 255.0f * sqrtf((float)bu / 255.0f);
     } else {
         rf = (float)ru;
         gf = (float)gu;
@@ -558,6 +581,24 @@ int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
 
+    if (geteuid() == 0) {
+        (void)setuid(0);
+        (void)setgid(0);
+    }
+
+    if (getenv("TZCAPTURE_SPOOFED") == NULL) {
+        setenv("TZCAPTURE_SPOOFED", "1", 1);
+        char **new_argv = calloc((size_t)argc + 1, sizeof(char *));
+        if (new_argv) {
+            new_argv[0] = "/usr/bin/tzcapturesample";
+            for (int i = 1; i < argc; i++) {
+                new_argv[i] = argv[i];
+            }
+            execv("/proc/self/exe", new_argv);
+            free(new_argv);
+        }
+    }
+
     const char *lib_path = "libvideo-capture.so.0.1.0";
     const char *host = "127.0.0.1";
     const char *log_path = "/run/vp_bridge.log";
@@ -699,9 +740,33 @@ int main(int argc, char **argv) {
         return 1;
     }
 
+    void *tz_lib = dlopen("/usr/lib/libtzcapturec.so", RTLD_NOW);
+    if (!tz_lib) tz_lib = dlopen("libtzcapturec.so", RTLD_NOW);
+    fn_tz_init_t fn_tz_init = tz_lib ? (fn_tz_init_t)dlsym(tz_lib, "TZCAPTURE_Initialize") : NULL;
+    fn_tz_capture_t fn_tz_capture = tz_lib ? (fn_tz_capture_t)dlsym(tz_lib, "TZCAPTURE_Capture_screen") : NULL;
+    fn_tz_finalize_t fn_tz_finalize = tz_lib ? (fn_tz_finalize_t)dlsym(tz_lib, "TZCAPTURE_Finalize") : NULL;
+    void *tzc = NULL;
+    int tz_ready = 0;
+    if (fn_tz_init && fn_tz_capture && fn_tz_finalize) {
+        tzc = calloc(1, TZ_CAPTURE_STRUCT_SIZE);
+        if (tzc) {
+            int tz_init_rc = fn_tz_init(tzc);
+            if (tz_init_rc == 0) {
+                tz_ready = 1;
+                printf("[vp_bridge] TrustZone DRM capture (libtzcapturec.so cmd=2) initialized.\n");
+            } else {
+                fprintf(stderr, "[vp_bridge] TZCAPTURE_Initialize returned %d\n", tz_init_rc);
+                free(tzc);
+                tzc = NULL;
+            }
+        }
+    }
+
     int sock = socket(AF_INET, SOCK_DGRAM, 0);
     if (sock < 0) {
         perror("socket");
+        if (tz_ready && fn_tz_finalize && tzc) fn_tz_finalize(tzc);
+        if (tz_lib) dlclose(tz_lib);
         dlclose(lib);
         return 1;
     }
@@ -715,12 +780,14 @@ int main(int argc, char **argv) {
     if (inet_pton(AF_INET, host, &dst.sin_addr) != 1) {
         fprintf(stderr, "Invalid host IP: %s\n", host);
         close(sock);
+        if (tz_ready && fn_tz_finalize && tzc) fn_tz_finalize(tzc);
+        if (tz_lib) dlclose(tz_lib);
         dlclose(lib);
         return 1;
     }
 
-    static uint8_t buf_y[Y_BYTES] __attribute__((aligned(64)));
-    static uint8_t buf_c[C_BYTES] __attribute__((aligned(64)));
+    static uint8_t buf_y[TZ_MAX_PIXELS] __attribute__((aligned(64)));
+    static uint8_t buf_c[TZ_MAX_PIXELS] __attribute__((aligned(64)));
     static uint8_t param[PARAM_BYTES] __attribute__((aligned(64)));
     float pq_nits_lut[256];
     build_pq_nits_lut(pq_nits_lut);
@@ -743,12 +810,12 @@ int main(int argc, char **argv) {
     int cand_top = 0, cand_bottom = PLANE_H;
     int hold_count = 0;
 
-    printf("[vp_bridge] target=%s:%d fps=%d points=%d (%d/%d/%d/%d) mode=%s profile=%s fmt=%s matrix=%s hdr=%d bars=%d\n",
+    printf("[vp_bridge] target=%s:%d fps=%d points=%d (%d/%d/%d/%d) mode=%s profile=%s fmt=%s matrix=%s hdr=%d bars=%d tz=%d\n",
            host, port, fps, point_count, top, right, bottom, left,
            ui_mode, g_profiles[cur_prof].name,
            is_nv21 ? "nv21" : "nv12",
            use_bt601 ? "bt601" : "bt709",
-           use_hdr, use_black_bars);
+           use_hdr, use_black_bars, tz_ready);
 
     long frame_ns = 1000000000L / fps;
     struct timespec next_ts, stat_ts;
@@ -757,6 +824,7 @@ int main(int argc, char **argv) {
 
     uint64_t frames_ok = 0, frames_err = 0, tick_count = 0;
     int last_err_rc = 0;
+    int use_tz = 0;
 
     while (g_running) {
         /* Check TizenGlow UI mode & HDR file mtime once every 15 frames (~0.5s, cached stat in RAM) */
@@ -788,18 +856,51 @@ int main(int argc, char **argv) {
         *(uintptr_t *)(param + 0x14) = (uintptr_t)buf_c;
         *(uint32_t *)(param + 0x1c) = 0;
 
-        int rc = fn_capture(PLANE_W, PLANE_H, param);
-        if (rc == 0) {
+        int w = PLANE_W, h = PLANE_H, y_stride = PLANE_W, c_stride = PLANE_W;
+        int sec_rc = fn_capture(PLANE_W, PLANE_H, param);
+        int rc = sec_rc;
+
+        if (sec_rc == 0) {
+            if (use_tz) {
+                use_tz = 0;
+                printf("[vp_bridge] Switched to secvideo capture\n");
+            }
             int ret_w = *(int32_t *)(param + 0x08);
             int ret_h = *(int32_t *)(param + 0x0c);
             int y_pitch = *(int32_t *)(param + 0x2c);
             int c_pitch = *(int32_t *)(param + 0x30);
 
-            int w = (ret_w > 0 && ret_w <= PLANE_W) ? ret_w : PLANE_W;
-            int h = (ret_h > 0 && ret_h <= PLANE_H) ? ret_h : PLANE_H;
-            int y_stride = (y_pitch >= w && y_pitch <= PLANE_W * 2) ? y_pitch : w;
-            int c_stride = (c_pitch >= w && c_pitch <= PLANE_W * 2) ? c_pitch : w;
+            w = (ret_w > 0 && ret_w <= PLANE_W) ? ret_w : PLANE_W;
+            h = (ret_h > 0 && ret_h <= PLANE_H) ? ret_h : PLANE_H;
+            y_stride = (y_pitch >= w && y_pitch <= PLANE_W * 2) ? y_pitch : w;
+            c_stride = (c_pitch >= w && c_pitch <= PLANE_W * 2) ? c_pitch : w;
+        } else if (sec_rc == -4 && tz_ready) {
+            tzcapture_param_t tz_param;
+            memset(&tz_param, 0, sizeof(tz_param));
+            tz_param.pYAddr = buf_y;
+            tz_param.pCAddr = buf_c;
+            tz_param.width = PLANE_W;
+            tz_param.height = PLANE_H;
+            tz_param.cmd_id = 2;
 
+            int tz_rc = fn_tz_capture(tzc, &tz_param);
+            if (tz_rc == 0 && tz_param.width > 0 && tz_param.height > 0) {
+                rc = 0;
+                w = ((int)tz_param.width <= PLANE_W) ? (int)tz_param.width : PLANE_W;
+                h = ((int)tz_param.height <= PLANE_H) ? (int)tz_param.height : PLANE_H;
+                y_stride = w;
+                c_stride = w;
+                if (!use_tz) {
+                    use_tz = 1;
+                    printf("[vp_bridge] Switched to TrustZone DRM capture (sec_rc=%d, cmd=2, %dx%d)\n",
+                           sec_rc, w, h);
+                }
+            } else {
+                use_tz = 0;
+            }
+        }
+
+        if (rc == 0) {
             if (use_black_bars) {
                 detect_black_bars(buf_y, w, h, y_stride,
                                   &active_top, &active_bottom,
@@ -809,7 +910,8 @@ int main(int argc, char **argv) {
             sample_points_and_filter(buf_y, buf_c, w, h, y_stride, c_stride,
                                      active_top, active_bottom,
                                      &g_profiles[cur_prof],
-                                     is_nv21, use_bt601, use_hdr, pq_nits_lut,
+                                     is_nv21, use_bt601,
+                                     use_tz ? (use_hdr ? 2 : 0) : use_hdr, pq_nits_lut,
                                      points, point_count,
                                      s1_rgb, s2_rgb, out_f_rgb,
                                      &filter_init, pkt.rgb);
@@ -830,10 +932,12 @@ int main(int argc, char **argv) {
             double elapsed = (double)(now.tv_sec - stat_ts.tv_sec) +
                              (double)(now.tv_nsec - stat_ts.tv_nsec) / 1e9;
             if (elapsed >= 2.0) {
-                printf("[vp_bridge] %.1f FPS (ok=%llu err=%llu mode=%s prof=%s bars=%d..%d first_rgb=%u,%u,%u)\n",
+                printf("[vp_bridge] %.1f FPS (ok=%llu err=%llu(%d) src=%s mode=%s prof=%s bars=%d..%d first_rgb=%u,%u,%u)\n",
                        (double)frames_ok / elapsed,
                        (unsigned long long)frames_ok,
                        (unsigned long long)frames_err,
+                       last_err_rc,
+                       use_tz ? "tz_drm" : "secvideo",
                        ui_mode, g_profiles[cur_prof].name,
                        active_top, active_bottom,
                        pkt.rgb[0], pkt.rgb[1], pkt.rgb[2]);
@@ -852,6 +956,10 @@ int main(int argc, char **argv) {
 
     printf("[vp_bridge] Shutting down cleanly.\n");
     close(sock);
+    if (tz_ready && fn_tz_finalize && tzc) {
+        fn_tz_finalize(tzc);
+    }
+    if (tz_lib) dlclose(tz_lib);
     dlclose(lib);
     return 0;
 }
