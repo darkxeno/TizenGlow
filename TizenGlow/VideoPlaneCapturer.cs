@@ -37,6 +37,9 @@ namespace TizenGlow
         private const int MaxConsecutiveFailuresBeforeFallback = 3;
         private const long FallbackProbeIntervalMs = 2000;
         private const double HdrPeakNits = 203.0;
+        private const int BarThresh = 18;
+        private const int MinBarPx = 12;
+        private const int BarHoldFrames = 8;
 
         [DllImport("libdl.so.2", EntryPoint = "dlopen", CharSet = CharSet.Ansi)]
         private static extern IntPtr dlopen(string filename, int flags);
@@ -62,6 +65,48 @@ namespace TizenGlow
         private static int _consecutiveFailures;
         private static long _nextProbeTimestamp;
         private static bool _inFallback;
+
+        // Configurable features (with sensible defaults and ability to disable each).
+        private static volatile bool _hdrEnabled = true;
+        private static volatile bool _blackBarsEnabled = true;
+        private static volatile int _spatialBlurPercent = 25;
+
+        // Hysteresis state for Y-plane active area detection.
+        private static int _activeTop, _activeBottom = PlaneH, _activeLeft, _activeRight = PlaneW;
+        private static int _candTop, _candBottom = PlaneH, _candLeft, _candRight = PlaneW;
+        private static int _barHoldCount;
+
+        public static string HdrSetting { get { return _hdrEnabled ? "on" : "off"; } }
+        public static string BlackBarsSetting { get { return _blackBarsEnabled ? "on" : "off"; } }
+        public static int SpatialBlurSetting { get { return _spatialBlurPercent; } }
+
+        public static bool TrySetHdr(string value)
+        {
+            if (value != "on" && value != "off") return false;
+            _hdrEnabled = (value == "on");
+            return true;
+        }
+
+        public static bool TrySetBlackBars(string value)
+        {
+            if (value != "on" && value != "off") return false;
+            _blackBarsEnabled = (value == "on");
+            if (!_blackBarsEnabled)
+            {
+                _activeTop = 0; _activeBottom = PlaneH;
+                _activeLeft = 0; _activeRight = PlaneW;
+                _barHoldCount = 0;
+            }
+            return true;
+        }
+
+        public static bool TrySetSpatialBlur(string value)
+        {
+            int pct;
+            if (!int.TryParse(value, out pct) || pct < 0 || pct > 50) return false;
+            _spatialBlurPercent = pct;
+            return true;
+        }
 
         public static bool IsActive { get { return _call != null && !_unavailable && !_inFallback; } }
 
@@ -167,20 +212,35 @@ namespace TizenGlow
             Marshal.Copy(_bufY, _y, 0, YBytes);
             Marshal.Copy(_bufC, _c, 0, CBytes);
 
-            colors = new Color[points.Length];
+            colors = SamplePointsFromPlanes(_y, _c, w, h, yStride, cStride, points);
+            return true;
+        }
+
+        internal static Color[] SamplePointsFromPlanes(byte[] y, byte[] c, int w, int h, int yStride, int cStride, CapturePoint[] points)
+        {
+            int activeLeft = 0, activeRight = w, activeTop = 0, activeBottom = h;
+            if (_blackBarsEnabled)
+            {
+                UpdateActiveArea(y, w, h, yStride, out activeLeft, out activeRight, out activeTop, out activeBottom);
+            }
+            int activeW = Math.Max(1, activeRight - activeLeft);
+            int activeH = Math.Max(1, activeBottom - activeTop);
+
+            var colors = new Color[points.Length];
             int halfBoxX = Math.Max(4, w / 80);
             int halfBoxY = Math.Max(4, h / 45);
             const int sampleStep = 3;
+            bool useHdr = _hdrEnabled;
 
             for (int i = 0; i < points.Length; i++)
             {
                 CapturePoint pt = points[i];
-                int cx = (int)(pt.X * w);
-                int cy = (int)(pt.Y * h);
-                int x0 = Math.Max(0, cx - halfBoxX);
-                int x1 = Math.Min(w, cx + halfBoxX + 1);
-                int y0 = Math.Max(0, cy - halfBoxY);
-                int y1 = Math.Min(h, cy + halfBoxY + 1);
+                int cx = activeLeft + (int)(pt.X * activeW);
+                int cy = activeTop + (int)(pt.Y * activeH);
+                int x0 = Math.Max(activeLeft, cx - halfBoxX);
+                int x1 = Math.Min(activeRight, cx + halfBoxX + 1);
+                int y0 = Math.Max(activeTop, cy - halfBoxY);
+                int y1 = Math.Min(activeBottom, cy + halfBoxY + 1);
                 if (x1 <= x0) x0 = Math.Max(0, x1 - 1);
                 if (y1 <= y0) y0 = Math.Max(0, y1 - 1);
 
@@ -191,9 +251,9 @@ namespace TizenGlow
                     for (int x = x0; x < x1; x += sampleStep)
                     {
                         int yi = yRow + x;
-                        if ((uint)yi < (uint)_y.Length)
+                        if ((uint)yi < (uint)y.Length)
                         {
-                            sy += _y[yi];
+                            sy += y[yi];
                             n++;
                         }
                     }
@@ -206,10 +266,10 @@ namespace TizenGlow
                     for (int cxCol = (x0 >> 1); cxCol <= ((x1 - 1) >> 1); cxCol += sampleStep)
                     {
                         int ci = cRow + (cxCol << 1);
-                        if ((uint)(ci + 1) < (uint)_c.Length)
+                        if ((uint)(ci + 1) < (uint)c.Length)
                         {
-                            su += _c[ci];
-                            sv += _c[ci + 1];
+                            su += c[ci];
+                            sv += c[ci + 1];
                             nc++;
                         }
                     }
@@ -222,11 +282,135 @@ namespace TizenGlow
                 int vm = nc > 0 ? (int)((sv + nc / 2) / nc) : 128;
 
                 byte r, g, b;
-                YuvHdrToRgb709(ym, um, vm, out r, out g, out b);
+                if (useHdr) YuvHdrToRgb709(ym, um, vm, out r, out g, out b);
+                else YuvSdrToRgb(ym, um, vm, out r, out g, out b);
                 colors[i] = new Color { R = r, G = g, B = b };
             }
 
-            return true;
+            return colors;
+        }
+
+        public static void ApplySpatialBlur(Color[] colors)
+        {
+            int pct = _spatialBlurPercent;
+            if (colors == null || colors.Length < 3 || pct <= 0) return;
+
+            int n = colors.Length;
+            double amount = pct / 100.0;
+            double k = 1.0 - amount;
+            double m = amount * 0.5;
+            var blurred = new Color[n];
+            for (int i = 0; i < n; i++)
+            {
+                Color prev = colors[(i - 1 + n) % n];
+                Color curr = colors[i];
+                Color next = colors[(i + 1) % n];
+                blurred[i] = new Color
+                {
+                    R = Clamp255(curr.R * k + (prev.R + next.R) * m),
+                    G = Clamp255(curr.G * k + (prev.G + next.G) * m),
+                    B = Clamp255(curr.B * k + (prev.B + next.B) * m)
+                };
+            }
+            Array.Copy(blurred, colors, n);
+        }
+
+        private static void UpdateActiveArea(byte[] y, int w, int h, int yStride, out int left, out int right, out int top, out int bottom)
+        {
+            int newTop, newBottom, newLeft, newRight;
+            DetectActiveAreaY(y, w, h, yStride, out newTop, out newBottom);
+            DetectActiveAreaX(y, w, h, yStride, out newLeft, out newRight);
+
+            if (newTop == _candTop && newBottom == _candBottom && newLeft == _candLeft && newRight == _candRight)
+            {
+                if (_barHoldCount < BarHoldFrames) _barHoldCount++;
+                if (_barHoldCount >= BarHoldFrames)
+                {
+                    _activeTop = newTop; _activeBottom = newBottom;
+                    _activeLeft = newLeft; _activeRight = newRight;
+                }
+            }
+            else
+            {
+                _candTop = newTop; _candBottom = newBottom;
+                _candLeft = newLeft; _candRight = newRight;
+                _barHoldCount = 1;
+            }
+
+            top = Math.Max(0, Math.Min(_activeTop, h - 1));
+            bottom = Math.Max(top + 1, Math.Min(_activeBottom, h));
+            left = Math.Max(0, Math.Min(_activeLeft, w - 1));
+            right = Math.Max(left + 1, Math.Min(_activeRight, w));
+        }
+
+        private static void DetectActiveAreaY(byte[] y, int w, int h, int yStride, out int yTop, out int yBottom)
+        {
+            const int step = 8;
+            int maxBar = h / 4;
+            int t = 0;
+            while (t < maxBar && RowIsBar(y, t, w, yStride, step)) t++;
+            yTop = (t >= maxBar) ? 0 : t;
+
+            int b = h - 1, run = 0;
+            while (run < maxBar && b > 0 && RowIsBar(y, b, w, yStride, step)) { b--; run++; }
+            yBottom = (run >= maxBar) ? h : (b + 1);
+
+            if (yBottom - yTop < h / 3) { yTop = 0; yBottom = h; }
+            if (yTop < MinBarPx) yTop = 0;
+            if (h - yBottom < MinBarPx) yBottom = h;
+        }
+
+        private static void DetectActiveAreaX(byte[] y, int w, int h, int yStride, out int xLeft, out int xRight)
+        {
+            const int step = 8;
+            int maxBar = w / 4;
+            int l = 0;
+            while (l < maxBar && ColIsBar(y, l, h, yStride, step)) l++;
+            xLeft = (l >= maxBar) ? 0 : l;
+
+            int r = w - 1, run = 0;
+            while (run < maxBar && r > 0 && ColIsBar(y, r, h, yStride, step)) { r--; run++; }
+            xRight = (run >= maxBar) ? w : (r + 1);
+
+            if (xRight - xLeft < w / 3) { xLeft = 0; xRight = w; }
+            if (xLeft < MinBarPx) xLeft = 0;
+            if (w - xRight < MinBarPx) xRight = w;
+        }
+
+        private static bool RowIsBar(byte[] y, int row, int w, int yStride, int step)
+        {
+            int baseIdx = row * yStride;
+            if (baseIdx < 0 || baseIdx + w > y.Length) return false;
+            int dark = 0, cnt = 0;
+            for (int x = 0; x < w; x += step)
+            {
+                if (y[baseIdx + x] < BarThresh) dark++;
+                cnt++;
+            }
+            return cnt > 0 && dark == cnt;
+        }
+
+        private static bool ColIsBar(byte[] y, int col, int h, int yStride, int step)
+        {
+            int dark = 0, cnt = 0;
+            for (int row = 0; row < h; row += step)
+            {
+                int idx = row * yStride + col;
+                if ((uint)idx >= (uint)y.Length) return false;
+                if (y[idx] < BarThresh) dark++;
+                cnt++;
+            }
+            return cnt > 0 && dark == cnt;
+        }
+
+        private static void YuvSdrToRgb(int y, int u, int v, out byte rOut, out byte gOut, out byte bOut)
+        {
+            int yy = Math.Max(0, y - 16);
+            int uu = u - 128;
+            int vv = v - 128;
+            rOut = (byte)Clamp255((298 * yy + 409 * vv + 128) >> 8);
+            gOut = (byte)Clamp255((298 * yy - 100 * uu - 208 * vv + 128) >> 8);
+            bOut = (byte)Clamp255((298 * yy + 516 * uu + 128) >> 8);
         }
 
         private static void YuvHdrToRgb709(int y, int u, int v, out byte rOut, out byte gOut, out byte bOut)

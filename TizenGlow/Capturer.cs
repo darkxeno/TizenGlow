@@ -203,6 +203,7 @@ namespace TizenGlow
             Color[] planeColors;
             if (VideoPlaneCapturer.TryCapturePoints(_capturedPoints, out planeColors))
             {
+                VideoPlaneCapturer.ApplySpatialBlur(planeColors);
                 return planeColors;
             }
 
@@ -252,6 +253,7 @@ namespace TizenGlow
                     }
                 }
             }
+            VideoPlaneCapturer.ApplySpatialBlur(colorData);
             return colorData;
         }
 

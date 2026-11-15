@@ -11,5 +11,6 @@
     <Compile Include="../TizenGlow/Letterbox.cs" />
     <Compile Include="../TizenGlow/Wled/LedLayout.cs" />
     <Compile Include="../TizenGlow/Wled/NanoleafSender.cs" />
+    <Compile Include="../TizenGlow/VideoPlaneCapturer.cs" />
   </ItemGroup>
 </Project>

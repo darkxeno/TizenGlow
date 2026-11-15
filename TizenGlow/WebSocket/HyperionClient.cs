@@ -93,6 +93,9 @@ namespace TizenGlow.WebSocket
             if (Preference.Contains("wledSaturation")) Wled.TrySetSaturation(Preference.Get<string>("wledSaturation"));
             if (Preference.Contains("wledTvOff")) Wled.TrySetTvOff(Preference.Get<string>("wledTvOff"));
             if (Preference.Contains("letterbox")) Letterbox.TrySetMode(Preference.Get<string>("letterbox"));
+            if (Preference.Contains("vpHdr")) VideoPlaneCapturer.TrySetHdr(Preference.Get<string>("vpHdr"));
+            if (Preference.Contains("vpBlackBars")) VideoPlaneCapturer.TrySetBlackBars(Preference.Get<string>("vpBlackBars"));
+            if (Preference.Contains("vpSpatialBlur")) VideoPlaneCapturer.TrySetSpatialBlur(Preference.Get<string>("vpSpatialBlur"));
             Autostart.TrySet(Preference.Contains("autostart") ? Preference.Get<string>("autostart") : "on"); // re-registered on every start
             if (Preference.Contains("levels")) Levels.TrySetEnabled(Preference.Get<string>("levels"));
             if (Preference.Contains("levelsWhite")) Levels.TrySetWhite(Preference.Get<string>("levelsWhite"));
