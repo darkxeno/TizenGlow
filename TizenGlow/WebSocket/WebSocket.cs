@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.WebSockets;
@@ -267,6 +267,21 @@ namespace TizenGlow.WebSocket
                 case "letterbox":
                     {
                         if (!Letterbox.TrySetMode(setConfigEvent.value)) return; // off / auto / on
+                        break;
+                    }
+                case "vpHdr":
+                    {
+                        if (!VideoPlaneCapturer.TrySetHdr(setConfigEvent.value)) return; // on / off
+                        break;
+                    }
+                case "vpBlackBars":
+                    {
+                        if (!VideoPlaneCapturer.TrySetBlackBars(setConfigEvent.value)) return; // on / off
+                        break;
+                    }
+                case "vpSpatialBlur":
+                    {
+                        if (!VideoPlaneCapturer.TrySetSpatialBlur(setConfigEvent.value)) return; // 0-50 (%)
                         break;
                     }
                 case "levels":
