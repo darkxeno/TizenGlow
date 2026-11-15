@@ -12,6 +12,7 @@
     <Compile Include="../TizenGlow/Wled/LedLayout.cs" />
     <Compile Include="../TizenGlow/Wled/NanoleafSender.cs" />
     <Compile Include="../TizenGlow/VideoPlaneCapturer.cs" />
+    <Compile Include="../TizenGlow/TgvpUdpReceiver.cs" />
     <Compile Include="../TizenGlow/AppLog.cs" />
     <Compile Include="../TizenGlow/WebSocket/WebUiServer.cs" />
   </ItemGroup>

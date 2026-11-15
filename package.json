@@ -1,7 +1,7 @@
 {
   "name": "@darkxeno/tizenglow",
   "appName": "TizenGlow",
-  "version": "1.4.4",
+  "version": "1.4.5",
   "description": "TizenGlow lights WLED or HyperHDR LEDs from what's on a Samsung Tizen TV's screen.",
   "packageType": "app",
   "appPath": "TizenGlowUI/index.html",
