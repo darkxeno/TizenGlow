@@ -65,6 +65,8 @@ namespace TizenGlow
         private static int _consecutiveFailures;
         private static long _nextProbeTimestamp;
         private static bool _inFallback;
+        private static volatile string _status = "not initialized";
+        private static int _lastFallbackRc = int.MinValue;
 
         // Configurable features (with sensible defaults and ability to disable each).
         private static volatile bool _hdrEnabled = true;
@@ -79,6 +81,14 @@ namespace TizenGlow
         public static string HdrSetting { get { return _hdrEnabled ? "on" : "off"; } }
         public static string BlackBarsSetting { get { return _blackBarsEnabled ? "on" : "off"; } }
         public static int SpatialBlurSetting { get { return _spatialBlurPercent; } }
+        public static string Status { get { return _status; } }
+
+        private static void SetStatus(string status, string logMessage = null)
+        {
+            if (_status == status) return;
+            _status = status;
+            if (logMessage != null) AppLog.Info("VideoPlane", logMessage);
+        }
 
         public static bool TrySetHdr(string value)
         {
@@ -121,10 +131,20 @@ namespace TizenGlow
                 _lib = dlopen(LibName, RTLD_NOW);
                 if (_lib == IntPtr.Zero) _lib = dlopen(LibName, RTLD_LAZY);
                 if (_lib == IntPtr.Zero) _lib = dlopen("/usr/lib/" + LibName, RTLD_LAZY);
-                if (_lib == IntPtr.Zero) { _unavailable = true; return false; }
+                if (_lib == IntPtr.Zero)
+                {
+                    _unavailable = true;
+                    SetStatus("unavailable (lib not found)", LibName + " not found");
+                    return false;
+                }
 
                 IntPtr fn = dlsym(_lib, Symbol);
-                if (fn == IntPtr.Zero) { _unavailable = true; return false; }
+                if (fn == IntPtr.Zero)
+                {
+                    _unavailable = true;
+                    SetStatus("unavailable (symbol not found)", Symbol + " symbol not found");
+                    return false;
+                }
 
                 _param = Marshal.AllocHGlobal(StructBytes);
                 _bufY = Marshal.AllocHGlobal(YBytes);
@@ -133,6 +153,7 @@ namespace TizenGlow
                 {
                     Shutdown();
                     _unavailable = true;
+                    SetStatus("unavailable (alloc failed)", "buffer allocation failed");
                     return false;
                 }
 
@@ -144,12 +165,14 @@ namespace TizenGlow
                 Marshal.WriteInt32(_param, OffColorFormat, 0);
 
                 _call = (CaptureVideoMainFn)Marshal.GetDelegateForFunctionPointer(fn, typeof(CaptureVideoMainFn));
+                SetStatus("ready", LibName + " loaded");
                 return true;
             }
-            catch
+            catch (Exception ex)
             {
                 Shutdown();
                 _unavailable = true;
+                SetStatus("unavailable (init error)", "init error: " + ex.GetType().Name + ": " + ex.Message);
                 return false;
             }
         }
@@ -171,9 +194,10 @@ namespace TizenGlow
             {
                 rc = _call(PlaneW, PlaneH, _param);
             }
-            catch
+            catch (Exception ex)
             {
                 _unavailable = true;
+                SetStatus("unavailable (call error)", "call threw " + ex.GetType().Name + ": " + ex.Message);
                 return false;
             }
 
@@ -184,25 +208,38 @@ namespace TizenGlow
                 {
                     _unavailable = true;
                     _inFallback = true;
+                    SetStatus("disabled (rc=-2)", "scaler wedged (rc=-2), disabled until reboot");
                     return false;
                 }
 
                 _consecutiveFailures++;
                 if (_inFallback || _consecutiveFailures >= MaxConsecutiveFailuresBeforeFallback)
                 {
+                    bool changed = !_inFallback || _lastFallbackRc != rc;
                     _inFallback = true;
                     _nextProbeTimestamp = nowMs + FallbackProbeIntervalMs;
+                    if (changed)
+                    {
+                        _lastFallbackRc = rc;
+                        string msg = "fallback (rc=" + rc + ")";
+                        SetStatus(msg, "entering fallback to libvideoenhance (rc=" + rc + ")");
+                    }
                 }
                 return false;
             }
 
             _consecutiveFailures = 0;
             _inFallback = false;
+            _lastFallbackRc = int.MinValue;
 
             int aw = Marshal.ReadInt32(_param, OffRetWidth);
             int ah = Marshal.ReadInt32(_param, OffRetHeight);
             int w = (aw >= 64 && aw <= PlaneW) ? aw : PlaneW;
             int h = (ah >= 64 && ah <= PlaneH) ? ah : PlaneH;
+            if (_status != "active")
+            {
+                SetStatus("active", "active (" + w + "x" + h + ")");
+            }
 
             int yp = Marshal.ReadInt32(_param, OffYPitch);
             int cp = Marshal.ReadInt32(_param, OffCPitch);
