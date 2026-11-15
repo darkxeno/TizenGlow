@@ -59,7 +59,7 @@ namespace TizenGlowUIApp
             {
                 Task.Delay(1000).ContinueWith(_ =>
                 {
-                    CoreContext.Post(() =>
+                    EcoreMainloop.Post(() =>
                     {
                         try { _webView?.LoadUrl("http://127.0.0.1:8090/"); } catch { }
                     });
@@ -72,7 +72,7 @@ namespace TizenGlowUIApp
 
         protected override void OnTerminate()
         {
-            try { _webView?.Dispose(); } catch { }
+            try { _webView?.Unrealize(); } catch { }
             base.OnTerminate();
         }
 
