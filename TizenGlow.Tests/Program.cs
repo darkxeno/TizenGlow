@@ -26,6 +26,7 @@ internal static class Program
         TestVideoPlaneBlackBarsDetectionAndDisable();
         TestLetterboxStateMachine();
         TestWebUiServerResolutionAndHttpServing();
+        TestTgvpUdpReceiverLifecycleAndMapping();
         Console.WriteLine("ALL TESTS PASSED.");
         return 0;
     }
@@ -443,4 +444,69 @@ internal static class Program
             try { serverTask.Wait(1000); } catch { }
         }
     }
+
+    private static void TestTgvpUdpReceiverLifecycleAndMapping()
+    {
+        TgvpUdpReceiver.ConfigureForTests(0, staleTimeoutMs: 120);
+
+        var pts = new[]
+        {
+            new CapturePoint(0.10, 0.03), // Top edge
+            new CapturePoint(0.97, 0.50), // Right edge
+            new CapturePoint(0.50, 0.97), // Bottom edge
+            new CapturePoint(0.03, 0.50)  // Left edge
+        };
+
+        Color[] colors;
+        Assert(!TgvpUdpReceiver.TryGetColors(pts, out colors), "Expected false before any TGVP packet");
+        int boundPort = TgvpUdpReceiver.BoundPort;
+        Assert(boundPort > 0, $"Expected ephemeral bound port > 0, got {boundPort}");
+        Assert(TgvpUdpReceiver.Status == $"waiting (TGVP UDP :{boundPort})",
+            $"Expected waiting status, got '{TgvpUdpReceiver.Status}'");
+
+        using var sender = new Socket(AddressFamily.InterNetwork, SocketType.Dgram, ProtocolType.Udp);
+        var target = new IPEndPoint(IPAddress.Loopback, boundPort);
+
+        // 1. Malformed packets should be ignored
+        sender.SendTo(new byte[] { (byte)'B', (byte)'A', (byte)'D', (byte)'!', 1, 1, 10, 20, 30 }, target);
+        sender.SendTo(new byte[] { (byte)'T', (byte)'G', (byte)'V', (byte)'P', 2, 1, 10, 20, 30 }, target);
+        Thread.Sleep(15);
+        Assert(!TgvpUdpReceiver.TryGetColors(pts, out colors), "Expected malformed packets to be ignored");
+
+        // 2. Send a valid 24-point TGVP v1 packet (7 top=Red, 5 right=Green, 7 bottom=Blue, 5 left=Yellow)
+        byte[] pkt = new byte[6 + 24 * 3];
+        pkt[0] = (byte)'T'; pkt[1] = (byte)'G'; pkt[2] = (byte)'V'; pkt[3] = (byte)'P';
+        pkt[4] = 1;
+        pkt[5] = 24;
+        for (int i = 0; i < 24; i++)
+        {
+            int o = 6 + i * 3;
+            if (i < 7) { pkt[o] = 250; pkt[o + 1] = 10; pkt[o + 2] = 20; }         // Top: Red
+            else if (i < 12) { pkt[o] = 10; pkt[o + 1] = 240; pkt[o + 2] = 20; }   // Right: Green
+            else if (i < 19) { pkt[o] = 20; pkt[o + 1] = 30; pkt[o + 2] = 245; }   // Bottom: Blue
+            else { pkt[o] = 230; pkt[o + 1] = 220; pkt[o + 2] = 15; }              // Left: Yellow
+        }
+        sender.SendTo(pkt, target);
+        Thread.Sleep(15);
+
+        Assert(TgvpUdpReceiver.TryGetColors(pts, out colors) && colors != null && colors.Length == 4,
+            "Expected TryGetColors to succeed after valid TGVP packet");
+        Assert(TgvpUdpReceiver.Status == $"active (TGVP UDP :{boundPort}, 24 pts)",
+            $"Expected active status, got '{TgvpUdpReceiver.Status}'");
+
+        Assert(colors[0].R == 250 && colors[0].G == 10 && colors[0].B == 20, $"Top color mismatch: {colors[0]}");
+        Assert(colors[1].R == 10 && colors[1].G == 240 && colors[1].B == 20, $"Right color mismatch: {colors[1]}");
+        Assert(colors[2].R == 20 && colors[2].G == 30 && colors[2].B == 245, $"Bottom color mismatch: {colors[2]}");
+        Assert(colors[3].R == 230 && colors[3].G == 220 && colors[3].B == 15, $"Left color mismatch: {colors[3]}");
+
+        // 3. Stale timeout transitions to fallback status
+        Thread.Sleep(160);
+        Assert(!TgvpUdpReceiver.TryGetColors(pts, out colors), "Expected false after stale timeout");
+        Assert(TgvpUdpReceiver.Status == $"stale (TGVP UDP :{boundPort} -> fallback)",
+            $"Expected stale status, got '{TgvpUdpReceiver.Status}'");
+
+        TgvpUdpReceiver.ConfigureForTests(TgvpUdpReceiver.DefaultListenPort);
+        Console.WriteLine($"[Test] TgvpUdpReceiver lifecycle + 24-point mapping on port {boundPort} OK");
+    }
 }
+

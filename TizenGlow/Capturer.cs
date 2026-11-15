@@ -206,8 +206,24 @@ namespace TizenGlow
         public static Color[] GetColors()
         {
             Color[] planeColors;
+            if (TgvpUdpReceiver.TryGetColors(_capturedPoints, out planeColors))
+            {
+                string tgvpStatus = TgvpUdpReceiver.Status;
+                if (!string.Equals(tgvpStatus, _lastVpStatus, StringComparison.Ordinal))
+                {
+                    _lastVpStatus = tgvpStatus;
+                    Report("videoPlaneStatus", tgvpStatus);
+                }
+                VideoPlaneCapturer.ApplySpatialBlur(planeColors);
+                return planeColors;
+            }
+
             bool vpOk = VideoPlaneCapturer.TryCapturePoints(_capturedPoints, out planeColors);
             string vpStatus = VideoPlaneCapturer.Status;
+            if (vpStatus == "disabled")
+            {
+                vpStatus = TgvpUdpReceiver.Status;
+            }
             if (!string.Equals(vpStatus, _lastVpStatus, StringComparison.Ordinal))
             {
                 _lastVpStatus = vpStatus;
