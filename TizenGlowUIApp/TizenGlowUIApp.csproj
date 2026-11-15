@@ -1,0 +1,16 @@
+<Project Sdk="Tizen.NET.Sdk/1.1.9">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>tizen90</TargetFramework>
+    <TizenCreateTpkOnBuild>false</TizenCreateTpkOnBuild>
+  </PropertyGroup>
+
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
+    <DebugType>portable</DebugType>
+  </PropertyGroup>
+  <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Release|AnyCPU' ">
+    <DebugType>None</DebugType>
+  </PropertyGroup>
+
+</Project>

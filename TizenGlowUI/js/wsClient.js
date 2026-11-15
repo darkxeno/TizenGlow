@@ -1,8 +1,8 @@
 // This page's version. Must equal tizen-manifest.xml and package.json; the release workflow checks.
-const uiVersion = '1.4.0';
+const uiVersion = '1.4.1';
 // Oldest service (TPK) this page works with. Raise it only when the page needs something new from the
 // service; a page-only release leaves it, and that release's TPK is then optional.
-const minService = '1.4.0'; // standalone WebUI + io.gh.darkxeno.TizenGlow
+const minService = '1.4.1'; // standalone WebUI + io.gh.darkxeno.TizenGlow
 
 let client;
 let deviceIP;
@@ -12,7 +12,7 @@ let canEnable = false;
 
 function open() {
     clearTimeout(reconnectTimer);
-    client = new WebSocket(`ws://${deviceIP}:8086`);
+    client = new WebSocket(`ws://${deviceIP}:8091`);
     client.onopen = onOpen;
     client.onmessage = onMessage;
     client.onclose = client.onerror = () => {
