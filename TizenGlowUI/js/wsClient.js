@@ -1,5 +1,5 @@
 // This page's version. Must equal tizen-manifest.xml and package.json; the release workflow checks.
-const uiVersion = '1.4.2';
+const uiVersion = '1.4.3';
 // Oldest service (TPK) this page works with. Raise it only when the page needs something new from the
 // service; a page-only release leaves it, and that release's TPK is then optional.
 const minService = '1.4.2'; // standalone WebUI + io.gh.darkxeno.TizenGlow
