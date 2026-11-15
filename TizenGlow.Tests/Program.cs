@@ -11,6 +11,9 @@ internal static class Program
         TestCinemaMode();
         TestNanoleafPacketCorrectness();
         TestWledTopRightRemap();
+        TestNanoleafConfigAndDefaults();
+        TestNanoleafMultiEdgePacket();
+        TestRemapEdgeBottomAndLeftHalf();
         TestNanoleafSenderZeroAllocBenchmark();
         TestVideoPlaneSettingsValidation();
         TestVideoPlaneSpatialBlur();
@@ -125,14 +128,104 @@ internal static class Program
         }
 
         LedLayout cached = null;
-        int[] topSlots = Array.Empty<int>();
-        NanoleafSender.RemapTopRightCorner(src, src.Length, layout, dst, ref cached, ref topSlots);
+        int[] slotMap = Array.Empty<int>();
+        NanoleafSender.RemapEdge(src, src.Length, layout, 0, dst, ref cached, ref slotMap, 0.625, 1.0);
 
         // Even the leftmost physical slot of WLED's Top edge should now be GREEN (0, 255, 0), not RED
         byte r = dst[topLeftPhys * 3];
         byte g = dst[topLeftPhys * 3 + 1];
         Console.WriteLine($"[Test] WLED Top remap (top-left slot): RGB=({r},{g},{dst[topLeftPhys * 3 + 2]})");
         Assert(r == 0 && g == 255, $"Expected remapped WLED Top to be green (0,255,0), got ({r},{g},0)");
+
+        // Full range (0.0..1.0) must be a plain copy (no remap)
+        NanoleafSender.RemapEdge(src, src.Length, layout, 0, dst, ref cached, ref slotMap, 0.0, 1.0);
+        Assert(dst[topLeftPhys * 3] == 255 && dst[topLeftPhys * 3 + 1] == 0, "Expected full-range RemapEdge to keep original RED at top-left");
+    }
+
+    private static void TestNanoleafConfigAndDefaults()
+    {
+        using var sender = new NanoleafSender();
+        Assert(!sender.Enabled, "NanoleafSender should be disabled by default");
+        Assert(sender.Ip == "", "NanoleafSender IP should be empty by default");
+        Assert(sender.Token == "", "NanoleafSender token should be empty by default");
+        Assert(sender.Edge == 0, "NanoleafSender edge should default to Top (0)");
+        Assert(sender.StartShare == 0.0 && sender.EndShare == 1.0, "NanoleafSender range should default to full (0..1)");
+
+        Assert(sender.TrySetEnabled("on") && sender.Enabled, "Should enable Nanoleaf");
+        Assert(sender.TrySetEnabled("off") && !sender.Enabled, "Should disable Nanoleaf");
+        Assert(!sender.TrySetEnabled("maybe"), "Should reject invalid enabled value");
+
+        Assert(sender.TrySetIp("192.168.10.168") && sender.Ip == "192.168.10.168", "Should accept valid IPv4");
+        Assert(!sender.TrySetIp("not-an-ip"), "Should reject invalid IP");
+        Assert(sender.TrySetIp("") && sender.Ip == "", "Should allow clearing IP");
+
+        Assert(sender.TrySetToken("  my-token  ") && sender.Token == "my-token", "Should trim and store token");
+
+        Assert(sender.TrySetEdge("top") && sender.Edge == 0, "Should set edge top");
+        Assert(sender.TrySetEdge("right") && sender.Edge == 1, "Should set edge right");
+        Assert(sender.TrySetEdge("bottom") && sender.Edge == 2, "Should set edge bottom");
+        Assert(sender.TrySetEdge("left") && sender.Edge == 3, "Should set edge left");
+        Assert(!sender.TrySetEdge("diagonal"), "Should reject invalid edge");
+
+        Assert(sender.TrySetRange("center70") && sender.StartShare > 0.08 && sender.EndShare < 0.79, "Should parse center70");
+        Assert(sender.TrySetRange("left50") && sender.StartShare == 0.0 && sender.EndShare == 0.5, "Should parse left50");
+        Assert(sender.TrySetRange("right50") && sender.StartShare == 0.5 && sender.EndShare == 1.0, "Should parse right50");
+        Assert(sender.TrySetRange("full") && sender.StartShare == 0.0 && sender.EndShare == 1.0, "Should parse full");
+        Assert(!sender.TrySetRange("bogus"), "Should reject invalid range");
+        Console.WriteLine("[Test] NanoleafSender defaults & config validation OK");
+    }
+
+    private static void TestNanoleafMultiEdgePacket()
+    {
+        var layout = new LedLayout(20, 20, 20, 20, StartCorner.TopLeft, true, CaptureMode.Detailed.Points);
+        byte[] rgb = new byte[layout.Count * 3];
+        for (int p = 0; p < layout.Count; p++)
+        {
+            int slot = layout.Slot(p);
+            if (slot < 20) { rgb[p * 3] = 255; } // Top: Red
+            else if (slot < 40) { rgb[p * 3 + 1] = 255; } // Right: Green
+            else if (slot < 60) { rgb[p * 3 + 2] = 255; } // Bottom: Blue
+            else { rgb[p * 3] = 255; rgb[p * 3 + 1] = 255; } // Left: Yellow
+        }
+
+        using var sender = new NanoleafSender();
+        Assert(sender.TrySetEdge("right"), "Set right edge");
+        byte[] pktRight = sender.BuildPacket(rgb, rgb.Length, layout);
+        Assert(pktRight[2 + 2] == 0 && pktRight[2 + 3] == 255 && pktRight[2 + 4] == 0, "Right edge packet should be Green");
+
+        Assert(sender.TrySetEdge("bottom"), "Set bottom edge");
+        byte[] pktBottom = sender.BuildPacket(rgb, rgb.Length, layout);
+        Assert(pktBottom[2 + 2] == 0 && pktBottom[2 + 3] == 0 && pktBottom[2 + 4] == 255, "Bottom edge packet should be Blue");
+
+        Assert(sender.TrySetEdge("left"), "Set left edge");
+        byte[] pktLeft = sender.BuildPacket(rgb, rgb.Length, layout);
+        Assert(pktLeft[2 + 2] == 255 && pktLeft[2 + 3] == 255 && pktLeft[2 + 4] == 0, "Left edge packet should be Yellow");
+        Console.WriteLine("[Test] NanoleafSender multi-edge BuildPacket OK");
+    }
+
+    private static void TestRemapEdgeBottomAndLeftHalf()
+    {
+        var layout = new LedLayout(10, 10, 10, 10, StartCorner.TopLeft, true, CaptureMode.Detailed.Points);
+        byte[] src = new byte[layout.Count * 3];
+        byte[] dst = new byte[layout.Count * 3];
+        // Top=Red, Bottom first half=Green, Bottom second half=Blue
+        for (int p = 0; p < layout.Count; p++)
+        {
+            int slot = layout.Slot(p);
+            if (slot < 10) src[p * 3] = 255;
+            else if (slot >= 20 && slot < 25) src[p * 3 + 1] = 255;
+            else if (slot >= 25 && slot < 30) src[p * 3 + 2] = 255;
+        }
+
+        LedLayout cached = null;
+        int[] slotMap = Array.Empty<int>();
+        NanoleafSender.RemapEdge(src, src.Length, layout, 2, dst, ref cached, ref slotMap, 0.0, 0.5);
+
+        // Top untouched (Red)
+        Assert(dst[0] == 255 && dst[1] == 0 && dst[2] == 0, "Top edge should stay Red");
+        // Last slot of Bottom (slot 29 -> physical 29 in TopLeft CW) should now be Green from first half
+        Assert(dst[29 * 3] == 0 && dst[29 * 3 + 1] == 255 && dst[29 * 3 + 2] == 0, "Bottom last slot should be Green after left50 remap");
+        Console.WriteLine("[Test] RemapEdge bottom left50 OK");
     }
 
     private static void TestNanoleafSenderZeroAllocBenchmark()
