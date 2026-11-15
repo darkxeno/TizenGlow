@@ -839,49 +839,32 @@ int main(int argc, char **argv) {
             }
         }
 
-        int rc = -1;
+        memset(param, 0, sizeof(param));
+        *(uint32_t *)(param + 0x00) = Y_BYTES;
+        *(uint32_t *)(param + 0x04) = C_BYTES;
+        *(uintptr_t *)(param + 0x10) = (uintptr_t)buf_y;
+        *(uintptr_t *)(param + 0x14) = (uintptr_t)buf_c;
+        *(uint32_t *)(param + 0x1c) = 0;
+
         int w = PLANE_W, h = PLANE_H, y_stride = PLANE_W, c_stride = PLANE_W;
+        int sec_rc = fn_capture(PLANE_W, PLANE_H, param);
+        int rc = sec_rc;
 
-        if (!use_tz) {
-            memset(param, 0, sizeof(param));
-            *(uint32_t *)(param + 0x00) = Y_BYTES;
-            *(uint32_t *)(param + 0x04) = C_BYTES;
-            *(uintptr_t *)(param + 0x10) = (uintptr_t)buf_y;
-            *(uintptr_t *)(param + 0x14) = (uintptr_t)buf_c;
-            *(uint32_t *)(param + 0x1c) = 0;
-
-            rc = fn_capture(PLANE_W, PLANE_H, param);
-            if (rc == 0) {
-                int ret_w = *(int32_t *)(param + 0x08);
-                int ret_h = *(int32_t *)(param + 0x0c);
-                int y_pitch = *(int32_t *)(param + 0x2c);
-                int c_pitch = *(int32_t *)(param + 0x30);
-
-                w = (ret_w > 0 && ret_w <= PLANE_W) ? ret_w : PLANE_W;
-                h = (ret_h > 0 && ret_h <= PLANE_H) ? ret_h : PLANE_H;
-                y_stride = (y_pitch >= w && y_pitch <= PLANE_W * 2) ? y_pitch : w;
-                c_stride = (c_pitch >= w && c_pitch <= PLANE_W * 2) ? c_pitch : w;
-            } else if (tz_ready) {
-                tzcapture_param_t tz_param;
-                memset(&tz_param, 0, sizeof(tz_param));
-                tz_param.pYAddr = buf_y;
-                tz_param.pCAddr = buf_c;
-                tz_param.width = PLANE_W;
-                tz_param.height = PLANE_H;
-                tz_param.cmd_id = 2;
-
-                int tz_rc = fn_tz_capture(tzc, &tz_param);
-                if (tz_rc == 0 && tz_param.width > 0 && tz_param.height > 0) {
-                    rc = 0;
-                    use_tz = 1;
-                    w = ((int)tz_param.width <= PLANE_W) ? (int)tz_param.width : PLANE_W;
-                    h = ((int)tz_param.height <= PLANE_H) ? (int)tz_param.height : PLANE_H;
-                    y_stride = w;
-                    c_stride = w;
-                    printf("[vp_bridge] Switched to TrustZone DRM capture (cmd=2, %dx%d)\n", w, h);
-                }
+        if (sec_rc == 0) {
+            if (use_tz) {
+                use_tz = 0;
+                printf("[vp_bridge] Switched to secvideo capture\n");
             }
-        } else {
+            int ret_w = *(int32_t *)(param + 0x08);
+            int ret_h = *(int32_t *)(param + 0x0c);
+            int y_pitch = *(int32_t *)(param + 0x2c);
+            int c_pitch = *(int32_t *)(param + 0x30);
+
+            w = (ret_w > 0 && ret_w <= PLANE_W) ? ret_w : PLANE_W;
+            h = (ret_h > 0 && ret_h <= PLANE_H) ? ret_h : PLANE_H;
+            y_stride = (y_pitch >= w && y_pitch <= PLANE_W * 2) ? y_pitch : w;
+            c_stride = (c_pitch >= w && c_pitch <= PLANE_W * 2) ? c_pitch : w;
+        } else if (sec_rc == -4 && tz_ready) {
             tzcapture_param_t tz_param;
             memset(&tz_param, 0, sizeof(tz_param));
             tz_param.pYAddr = buf_y;
@@ -897,30 +880,13 @@ int main(int argc, char **argv) {
                 h = ((int)tz_param.height <= PLANE_H) ? (int)tz_param.height : PLANE_H;
                 y_stride = w;
                 c_stride = w;
+                if (!use_tz) {
+                    use_tz = 1;
+                    printf("[vp_bridge] Switched to TrustZone DRM capture (sec_rc=%d, cmd=2, %dx%d)\n",
+                           sec_rc, w, h);
+                }
             } else {
                 use_tz = 0;
-                memset(param, 0, sizeof(param));
-                *(uint32_t *)(param + 0x00) = Y_BYTES;
-                *(uint32_t *)(param + 0x04) = C_BYTES;
-                *(uintptr_t *)(param + 0x10) = (uintptr_t)buf_y;
-                *(uintptr_t *)(param + 0x14) = (uintptr_t)buf_c;
-                *(uint32_t *)(param + 0x1c) = 0;
-
-                rc = fn_capture(PLANE_W, PLANE_H, param);
-                if (rc == 0) {
-                    int ret_w = *(int32_t *)(param + 0x08);
-                    int ret_h = *(int32_t *)(param + 0x0c);
-                    int y_pitch = *(int32_t *)(param + 0x2c);
-                    int c_pitch = *(int32_t *)(param + 0x30);
-
-                    w = (ret_w > 0 && ret_w <= PLANE_W) ? ret_w : PLANE_W;
-                    h = (ret_h > 0 && ret_h <= PLANE_H) ? ret_h : PLANE_H;
-                    y_stride = (y_pitch >= w && y_pitch <= PLANE_W * 2) ? y_pitch : w;
-                    c_stride = (c_pitch >= w && c_pitch <= PLANE_W * 2) ? c_pitch : w;
-                    printf("[vp_bridge] Switched back to secvideo capture (%dx%d)\n", w, h);
-                } else {
-                    rc = tz_rc != 0 ? tz_rc : -2;
-                }
             }
         }
 
