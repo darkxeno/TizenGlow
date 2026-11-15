@@ -82,7 +82,7 @@ namespace TizenGlow.WebSocket
             if (Preference.Contains("targetFps")) TrySetTargetFps(Preference.Get<string>("targetFps"));
 
             HyperHdr = new HyperHdrOutput(Preference.Contains("rpcServer") ? Preference.Get<string>("rpcServer") : null);
-            Wled = new WledOutput(() => _mode.SmoothingMs);
+            Wled = new WledOutput(() => (TgvpUdpReceiver.IsActive && _mode != CaptureMode.CinemaPro) ? 0 : _mode.SmoothingMs);
             if (Preference.Contains("wledTarget")) Wled.TrySetTarget(Preference.Get<string>("wledTarget"));
             if (Preference.Contains("ledShift")) Wled.TrySetShift(Preference.Get<string>("ledShift"));
             if (Preference.Contains("ledLayout")) Wled.TrySetLayout(Preference.Get<string>("ledLayout"));
@@ -144,7 +144,7 @@ namespace TizenGlow.WebSocket
             s.outputState = output.State;
             if (output == Wled) Wled.Describe(s);
 
-            PointSet points = Letterbox.Inset ? _mode.BarsPoints : _mode.Points;
+            PointSet points = Letterbox.Inset ? _mode.EffectiveBarsPoints : _mode.EffectivePoints;
             if (output == Wled && Wled.Layout != null)
                 points = points.ForActiveEdges(Wled.Layout.Top > 0, Wled.Layout.Right > 0, Wled.Layout.Bottom > 0, Wled.Layout.Left > 0);
             Condition condition = Capturer.CurrentCondition;
