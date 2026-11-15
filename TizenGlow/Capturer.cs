@@ -15,6 +15,7 @@ namespace TizenGlow
         private static CaptureProbe _probe;
         private static CaptureFamily _api;
         private static string _state;
+        private static string _lastVpStatus;
         private static readonly HashSet<string> _notified = new HashSet<string>();
 
         // A pixel read that keeps failing used to be retried forever, pinning a core.
@@ -58,7 +59,10 @@ namespace TizenGlow
             _condition = default(Condition);
             Report("detectedPlatformVersion", version);
             Report("detectedApi", _probe.Selected);
+            _lastVpStatus = VideoPlaneCapturer.Status;
+            Report("videoPlaneStatus", _lastVpStatus);
             Report("captureCondition", "not read yet");
+            AppLog.Info("Capturer", $"Probe: platform={version}, selected={_probe.Selected}, candidates={_probe.Candidates.Count}");
             SetState(_probe.Candidates.Count == 0 ? "unsupported" : "idle");
             return _probe;
         }
@@ -103,6 +107,7 @@ namespace TizenGlow
                     _api = family;
                     Report("detectedApi", family.Name);
                     Report("lastCaptureError", failures.Count == 0 ? "none" : Diagnostic("GetCondition fell back to " + family.Name, string.Join("; ", failures)));
+                    AppLog.Info("Capturer", $"GetCondition selected {family.Name} ({condition.Width}x{condition.Height}, points={condition.ScreenCapturePoints})");
                     return true;
                 }
                 failures.Add(family.Name + "_get_rgb_measure_condition returned " + res + (res >= 0 ? " with an unusable condition" : ""));
@@ -201,7 +206,14 @@ namespace TizenGlow
         public static Color[] GetColors()
         {
             Color[] planeColors;
-            if (VideoPlaneCapturer.TryCapturePoints(_capturedPoints, out planeColors))
+            bool vpOk = VideoPlaneCapturer.TryCapturePoints(_capturedPoints, out planeColors);
+            string vpStatus = VideoPlaneCapturer.Status;
+            if (!string.Equals(vpStatus, _lastVpStatus, StringComparison.Ordinal))
+            {
+                _lastVpStatus = vpStatus;
+                Report("videoPlaneStatus", vpStatus);
+            }
+            if (vpOk)
             {
                 VideoPlaneCapturer.ApplySpatialBlur(planeColors);
                 return planeColors;

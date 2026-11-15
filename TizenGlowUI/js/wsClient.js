@@ -412,7 +412,7 @@ window.testWled = color => {
 }
 
 // Written by the native service (Capturer.cs) as preferences; read back with ReadConfig.
-const captureStatusKeys = ['captureState', 'detectedApi', 'detectedPlatformVersion', 'lastCaptureError'];
+const captureStatusKeys = ['captureState', 'detectedApi', 'detectedPlatformVersion', 'videoPlaneStatus', 'lastCaptureError'];
 
 function readCaptureStatus() {
     for (const key of captureStatusKeys) send({ event: events.ReadConfig, key });
