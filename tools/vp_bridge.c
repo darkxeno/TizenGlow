@@ -864,7 +864,7 @@ int main(int argc, char **argv) {
             h = (ret_h > 0 && ret_h <= PLANE_H) ? ret_h : PLANE_H;
             y_stride = (y_pitch >= w && y_pitch <= PLANE_W * 2) ? y_pitch : w;
             c_stride = (c_pitch >= w && c_pitch <= PLANE_W * 2) ? c_pitch : w;
-        } else if (sec_rc == -4 && tz_ready) {
+        } else if (tz_ready) {
             tzcapture_param_t tz_param;
             memset(&tz_param, 0, sizeof(tz_param));
             tz_param.pYAddr = buf_y;
