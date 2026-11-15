@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Threading;
@@ -200,6 +200,12 @@ namespace TizenGlow
         
         public static Color[] GetColors()
         {
+            Color[] planeColors;
+            if (VideoPlaneCapturer.TryCapturePoints(_capturedPoints, out planeColors))
+            {
+                return planeColors;
+            }
+
             Color[] colorData = new Color[_capturedPoints.Length];
             CaptureFamily api = _api;
             int batch = _condition.ScreenCapturePoints;
