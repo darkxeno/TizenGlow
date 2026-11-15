@@ -46,4 +46,8 @@
     <EmbeddedResource Include="..\TizenGlowUI\js\calibration.js" LogicalName="TizenGlowUI.js.calibration.js" />
   </ItemGroup>
 
+  <ItemGroup>
+    <ProjectReference Include="..\TizenGlowUIApp\TizenGlowUIApp.csproj" />
+  </ItemGroup>
+
 </Project>
