@@ -141,6 +141,13 @@ namespace TizenGlow.WebSocket
                     ? new ReadConfigResultEvent(false, readConfigEvent.key, preview)
                     : new ReadConfigResultEvent(true, readConfigEvent.key, "No LED frame yet."));
             }
+            else if (readConfigEvent.key == "nanoleafDiscover")
+            {
+                string ip = await Task.Run(() => TizenGlow.Wled.NanoleafSender.DiscoverNanoleafIp());
+                result = JsonConvert.SerializeObject(!string.IsNullOrEmpty(ip)
+                    ? new ReadConfigResultEvent(false, readConfigEvent.key, ip)
+                    : new ReadConfigResultEvent(true, readConfigEvent.key, "No Nanoleaf found on the network."));
+            }
             else if (!Preference.Contains(readConfigEvent.key))
             {
                 result = JsonConvert.SerializeObject(new ReadConfigResultEvent(true, readConfigEvent.key, "Key doesn't exist."));
@@ -242,6 +249,41 @@ namespace TizenGlow.WebSocket
                 case "wledTvOff":
                     {
                         if (!App.client.Wled.TrySetTvOff(setConfigEvent.value)) return; // off / leave
+                        break;
+                    }
+                case "wledTopRange":
+                    {
+                        if (!App.client.Wled.TrySetWledTopRange(setConfigEvent.value)) return; // full / left50 / right50 / right38 / left62
+                        break;
+                    }
+                case "nanoleafEnabled":
+                    {
+                        if (!App.client.Wled.TrySetNanoleafEnabled(setConfigEvent.value)) return; // on / off
+                        break;
+                    }
+                case "nanoleafAutoDiscover":
+                    {
+                        if (!App.client.Wled.TrySetNanoleafAutoDiscover(setConfigEvent.value)) return; // on / off
+                        break;
+                    }
+                case "nanoleafIp":
+                    {
+                        if (!App.client.Wled.TrySetNanoleafIp(setConfigEvent.value)) return; // IPv4 or empty
+                        break;
+                    }
+                case "nanoleafToken":
+                    {
+                        if (!App.client.Wled.TrySetNanoleafToken(setConfigEvent.value)) return;
+                        break;
+                    }
+                case "nanoleafEdge":
+                    {
+                        if (!App.client.Wled.TrySetNanoleafEdge(setConfigEvent.value)) return; // top / right / bottom / left
+                        break;
+                    }
+                case "nanoleafRange":
+                    {
+                        if (!App.client.Wled.TrySetNanoleafRange(setConfigEvent.value)) return; // full / center70 / left50 / right50
                         break;
                     }
                 case "wledGamma":

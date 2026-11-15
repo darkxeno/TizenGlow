@@ -1,8 +1,8 @@
 // This page's version. Must equal tizen-manifest.xml and package.json; the release workflow checks.
-const uiVersion = '1.3.4';
+const uiVersion = '1.3.5';
 // Oldest service (TPK) this page works with. Raise it only when the page needs something new from the
 // service; a page-only release leaves it, and that release's TPK is then optional.
-const minService = '1.3.4'; // strip off with the TV
+const minService = '1.3.5'; // strip off with the TV
 
 let client;
 let deviceIP;
@@ -201,7 +201,37 @@ const directionSel = makeSelector('ledDirection', Object.keys(directionLabels), 
 window.stepLedStart = cornerSel.step;
 window.stepLedDirection = directionSel.step;
 
-const wledKeys = ['outputMode', 'wledTarget', 'ledLayout', 'wledBrightness', 'wledBlackThreshold', 'wledSmoothing', 'ledShift', 'wledSaturation', 'wledGamma', 'wledTvOff'];
+const wledTopRangeLabels = { full: 'Full (0–100%)', left50: 'Left half (0–50%)', right50: 'Right half (50–100%)', right38: 'Right corner (62.5–100%)', left62: 'Left 62.5% (0–62.5%)' };
+const nanoleafEdgeLabels = { top: 'Top', right: 'Right', bottom: 'Bottom', left: 'Left' };
+const nanoleafRangeLabels = { full: 'Full (0–100%)', center70: 'Center (8–78%)', left50: 'Left half (0–50%)', right50: 'Right half (50–100%)' };
+
+let curWledTopRange = 'full';
+let curNanoleafEnabled = 'off';
+let curNanoleafEdge = 'top';
+let curNanoleafRange = 'full';
+
+function updateZoneSummary() {
+    const el = document.getElementById('zoneSummary');
+    if (!el) return;
+    const wledDesc = `WLED: Top ${wledTopRangeLabels[curWledTopRange] || curWledTopRange} + Right + Bottom + Left`;
+    const nanoDesc = curNanoleafEnabled === 'on'
+        ? `Nanoleaf: ${nanoleafEdgeLabels[curNanoleafEdge] || curNanoleafEdge} ${nanoleafRangeLabels[curNanoleafRange] || curNanoleafRange}`
+        : 'Nanoleaf: Off';
+    el.textContent = `${wledDesc} | ${nanoDesc}`;
+}
+
+const wledTopRangeSel = makeSelector('wledTopRange', Object.keys(wledTopRangeLabels), 'full', v => `WLED top zone: &lt; ${wledTopRangeLabels[v]} &gt;`, 'wledTopRange', v => { curWledTopRange = v; updateZoneSummary(); });
+const nanoleafEnabledSel = makeSelector('nanoleafEnabled', ['off', 'on'], 'off', v => `Nanoleaf: &lt; ${v === 'on' ? 'On' : 'Off'} &gt;`, 'nanoleafEnabled', v => { curNanoleafEnabled = v; updateZoneSummary(); });
+const nanoleafAutoDiscoverSel = makeSelector('nanoleafAutoDiscover', ['on', 'off'], 'on', v => `Auto-detect IP: &lt; ${v === 'on' ? 'On' : 'Off'} &gt;`, 'nanoleafAutoDiscover');
+const nanoleafEdgeSel = makeSelector('nanoleafEdge', Object.keys(nanoleafEdgeLabels), 'top', v => `Nanoleaf TV edge: &lt; ${nanoleafEdgeLabels[v]} &gt;`, 'nanoleafEdge', v => { curNanoleafEdge = v; updateZoneSummary(); });
+const nanoleafRangeSel = makeSelector('nanoleafRange', Object.keys(nanoleafRangeLabels), 'full', v => `Nanoleaf edge range: &lt; ${nanoleafRangeLabels[v]} &gt;`, 'nanoleafRange', v => { curNanoleafRange = v; updateZoneSummary(); });
+window.stepWledTopRange = wledTopRangeSel.step;
+window.stepNanoleafEnabled = nanoleafEnabledSel.step;
+window.stepNanoleafAutoDiscover = nanoleafAutoDiscoverSel.step;
+window.stepNanoleafEdge = nanoleafEdgeSel.step;
+window.stepNanoleafRange = nanoleafRangeSel.step;
+
+const wledKeys = ['outputMode', 'wledTarget', 'ledLayout', 'wledBrightness', 'wledBlackThreshold', 'wledSmoothing', 'ledShift', 'wledSaturation', 'wledGamma', 'wledTvOff', 'wledTopRange', 'nanoleafEnabled', 'nanoleafAutoDiscover', 'nanoleafIp', 'nanoleafToken', 'nanoleafEdge', 'nanoleafRange'];
 const ledSides = ['ledTop', 'ledRight', 'ledBottom', 'ledLeft'];
 let wledReady = false;
 
@@ -237,6 +267,28 @@ function showWledTarget(value) {
     document.getElementById('wledPort').value = value.slice(colon + 1);
     wledReady = true;
 }
+
+window.saveNanoleafTarget = () => {
+    const ip = String(document.getElementById('nanoleafIp').value).trim();
+    const token = String(document.getElementById('nanoleafToken').value).trim();
+    if (ip && !/^(?:\d{1,3}\.){3}\d{1,3}$/.test(ip)) {
+        return showStatus('nanoleafStatus', `Invalid Nanoleaf IP: "${ip}" (IPv4 address expected)`, true);
+    }
+    if (!connected()) {
+        return showStatus('nanoleafStatus', 'Not connected to the TizenGlow service yet, try again in a moment', true);
+    }
+    send({ event: events.SetConfig, key: 'nanoleafIp', value: ip });
+    send({ event: events.SetConfig, key: 'nanoleafToken', value: token });
+    showStatus('nanoleafStatus', ip ? `Nanoleaf saved: ${ip}` : 'Nanoleaf target cleared');
+};
+
+window.detectNanoleafIp = () => {
+    if (!connected()) {
+        return showStatus('nanoleafStatus', 'Not connected to the TizenGlow service yet, try again in a moment', true);
+    }
+    showStatus('nanoleafStatus', 'Searching for Nanoleaf on the network…');
+    send({ event: events.ReadConfig, key: 'nanoleafDiscover' });
+};
 
 // Counts as typed: empty is 0, anything else must be a whole number 0-2000. Returns { counts } or { error }.
 function readLedCounts() {
@@ -502,6 +554,28 @@ function onMessage(data) {
                 showLedShift(msg.error ? 0 : Number(msg.value));
             } else if (msg.key === 'wledTvOff') {
                 tvOffSel.show(msg.error ? 'off' : msg.value);
+            } else if (msg.key === 'wledTopRange') {
+                wledTopRangeSel.show(msg.error ? 'full' : msg.value);
+            } else if (msg.key === 'nanoleafEnabled') {
+                nanoleafEnabledSel.show(msg.error ? 'off' : msg.value);
+            } else if (msg.key === 'nanoleafAutoDiscover') {
+                nanoleafAutoDiscoverSel.show(msg.error ? 'on' : msg.value);
+            } else if (msg.key === 'nanoleafDiscover') {
+                if (msg.error || !msg.value) {
+                    showStatus('nanoleafStatus', msg.value || 'No Nanoleaf found on the network.', true);
+                } else {
+                    document.getElementById('nanoleafIp').value = msg.value;
+                    send({ event: events.SetConfig, key: 'nanoleafIp', value: msg.value });
+                    showStatus('nanoleafStatus', `Nanoleaf detected & saved: ${msg.value}`);
+                }
+            } else if (msg.key === 'nanoleafIp') {
+                document.getElementById('nanoleafIp').value = msg.error ? '' : (msg.value || '');
+            } else if (msg.key === 'nanoleafToken') {
+                document.getElementById('nanoleafToken').value = msg.error ? '' : (msg.value || '');
+            } else if (msg.key === 'nanoleafEdge') {
+                nanoleafEdgeSel.show(msg.error ? 'top' : msg.value);
+            } else if (msg.key === 'nanoleafRange') {
+                nanoleafRangeSel.show(msg.error ? 'full' : msg.value);
             } else if (msg.key === 'wledSaturation') {
                 saturationSel.show(msg.error ? 100 : Number(msg.value));
             } else if (msg.key === 'wledGamma') {

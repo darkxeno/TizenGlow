@@ -92,6 +92,13 @@ namespace TizenGlow.WebSocket
             if (Preference.Contains("wledGamma")) Wled.TrySetGamma(Preference.Get<string>("wledGamma"));
             if (Preference.Contains("wledSaturation")) Wled.TrySetSaturation(Preference.Get<string>("wledSaturation"));
             if (Preference.Contains("wledTvOff")) Wled.TrySetTvOff(Preference.Get<string>("wledTvOff"));
+            if (Preference.Contains("wledTopRange")) Wled.TrySetWledTopRange(Preference.Get<string>("wledTopRange"));
+            if (Preference.Contains("nanoleafEnabled")) Wled.TrySetNanoleafEnabled(Preference.Get<string>("nanoleafEnabled"));
+            if (Preference.Contains("nanoleafAutoDiscover")) Wled.TrySetNanoleafAutoDiscover(Preference.Get<string>("nanoleafAutoDiscover"));
+            if (Preference.Contains("nanoleafIp")) Wled.TrySetNanoleafIp(Preference.Get<string>("nanoleafIp"));
+            if (Preference.Contains("nanoleafToken")) Wled.TrySetNanoleafToken(Preference.Get<string>("nanoleafToken"));
+            if (Preference.Contains("nanoleafEdge")) Wled.TrySetNanoleafEdge(Preference.Get<string>("nanoleafEdge"));
+            if (Preference.Contains("nanoleafRange")) Wled.TrySetNanoleafRange(Preference.Get<string>("nanoleafRange"));
             if (Preference.Contains("letterbox")) Letterbox.TrySetMode(Preference.Get<string>("letterbox"));
             if (Preference.Contains("vpHdr")) VideoPlaneCapturer.TrySetHdr(Preference.Get<string>("vpHdr"));
             if (Preference.Contains("vpBlackBars")) VideoPlaneCapturer.TrySetBlackBars(Preference.Get<string>("vpBlackBars"));

@@ -66,7 +66,9 @@ namespace TizenGlow.Wled
         private byte[] _rgb = new byte[0];
         private byte[] _wledRemapRgb = new byte[0];
         private LedLayout _remapLayout;
-        private int[] _remapTopSlots = Array.Empty<int>();
+        private int[] _remapSlotToPhysical = Array.Empty<int>();
+        private double _wledTopStart = 0.0;
+        private double _wledTopEnd = 1.0;
         private int _frameLength;
         private readonly Queue<double> _sendTimes = new Queue<double>();
 
@@ -265,6 +267,22 @@ namespace TizenGlow.Wled
             lock (_lock) _offWithTv = value == "off";
             return true;
         }
+
+        /// <summary>Sub-range of the canonical Top edge sent to WLED ("full", "left50", "right50", "right38", "left62").</summary>
+        public bool TrySetWledTopRange(string value)
+        {
+            double start, end;
+            if (!NanoleafSender.TryParseRange(value, out start, out end)) return false;
+            lock (_lock) { _wledTopStart = start; _wledTopEnd = end; _dirty = true; }
+            return true;
+        }
+
+        public bool TrySetNanoleafEnabled(string value) => _nanoleaf.TrySetEnabled(value);
+        public bool TrySetNanoleafAutoDiscover(string value) => _nanoleaf.TrySetAutoDiscover(value);
+        public bool TrySetNanoleafIp(string value) => _nanoleaf.TrySetIp(value);
+        public bool TrySetNanoleafToken(string value) => _nanoleaf.TrySetToken(value);
+        public bool TrySetNanoleafEdge(string value) => _nanoleaf.TrySetEdge(value);
+        public bool TrySetNanoleafRange(string value) => _nanoleaf.TrySetRange(value);
 
         /// <summary>
         /// The TV turned off while TizenGlow drove the strip: switch it off with WLED's JSON API, ending realtime
@@ -541,10 +559,10 @@ namespace TizenGlow.Wled
                 if (_sender == null) _sender = new DdpSender();
                 _nanoleaf?.Send(rgb, length, _layout);
                 byte[] wledRgb = rgb;
-                if (_layout != null && _layout.Top > 1)
+                if (_layout != null && _layout.Top > 1 && (_wledTopStart > 0.0 || _wledTopEnd < 1.0))
                 {
                     if (_wledRemapRgb.Length < length) _wledRemapRgb = new byte[length];
-                    NanoleafSender.RemapTopRightCorner(rgb, length, _layout, _wledRemapRgb, ref _remapLayout, ref _remapTopSlots);
+                    NanoleafSender.RemapEdge(rgb, length, _layout, 0, _wledRemapRgb, ref _remapLayout, ref _remapSlotToPhysical, _wledTopStart, _wledTopEnd);
                     wledRgb = _wledRemapRgb;
                 }
                 int packets = _sender.Send(_endpoint, wledRgb, length);

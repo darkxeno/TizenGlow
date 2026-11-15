@@ -119,6 +119,26 @@
                         <p id="layoutStatus" class="hint">Start corner and direction are where the strip's first LED sits and which way it runs, seen from the front of the TV.</p>
                         <button id="ledShift" data-step="stepLedShift" onclick="stepLedShift(1, true)">LED shift: &lt; 0 &gt;</button>
                         <p class="hint">Moves the colours round the strip one LED at a time, applied at once: + clockwise, - counter-clockwise. Easiest on the calibration screen: Four Edges, then UP / DOWN until the corners line up.</p>
+                        <button id="wledTopRange" data-step="stepWledTopRange" onclick="stepWledTopRange(1, true)">WLED top zone: &lt; Full (0–100%) &gt;</button>
+                        <p id="zoneSummary" class="hint"></p>
+                    </div>
+                </section>
+
+                <section class="card">
+                    <h2>Nanoleaf</h2>
+                    <div class="form">
+                        <button id="nanoleafEnabled" data-step="stepNanoleafEnabled" onclick="stepNanoleafEnabled(1, true)">Nanoleaf: &lt; Off &gt;</button>
+                        <button id="nanoleafAutoDiscover" data-step="stepNanoleafAutoDiscover" onclick="stepNanoleafAutoDiscover(1, true)">Auto-detect IP: &lt; On &gt;</button>
+                        <label for="nanoleafIp">Nanoleaf IP</label>
+                        <input type="text" id="nanoleafIp" placeholder="e.g. 192.168.10.168" autocomplete="off" autocapitalize="off" spellcheck="false">
+                        <button id="nanoleafDetect" onclick="detectNanoleafIp()">Detect Nanoleaf IP</button>
+                        <label for="nanoleafToken">Auth token</label>
+                        <input type="text" id="nanoleafToken" placeholder="Nanoleaf API token" autocomplete="off" autocapitalize="off" spellcheck="false">
+                        <button id="nanoleafSave" onclick="saveNanoleafTarget()">Save Nanoleaf</button>
+                        <p id="nanoleafStatus"></p>
+                        <button id="nanoleafEdge" data-step="stepNanoleafEdge" onclick="stepNanoleafEdge(1, true)">Nanoleaf TV edge: &lt; Top &gt;</button>
+                        <button id="nanoleafRange" data-step="stepNanoleafRange" onclick="stepNanoleafRange(1, true)">Nanoleaf edge range: &lt; Full (0–100%) &gt;</button>
+                        <p class="hint">Streams the chosen TV edge to Nanoleaf over extControl v2 (UDP 60222).</p>
                     </div>
                 </section>
 
