@@ -1,4 +1,4 @@
-﻿<Project Sdk="Tizen.NET.Sdk/1.1.9">
+<Project Sdk="Tizen.NET.Sdk/1.1.9">
 
   <!-- Property Group for .NET Core Project -->
   <PropertyGroup>
@@ -36,6 +36,14 @@
     <PackageReference Include="Newtonsoft.Json" Version="13.0.3" />
     <PackageReference Include="Rssdp" Version="4.0.4" />
     <PackageReference Include="SkiaSharp" Version="2.88.9" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <EmbeddedResource Include="..\TizenGlowUI\index.html" LogicalName="TizenGlowUI.index.html" />
+    <EmbeddedResource Include="..\TizenGlowUI\main.css" LogicalName="TizenGlowUI.main.css" />
+    <EmbeddedResource Include="..\TizenGlowUI\icon.png" LogicalName="TizenGlowUI.icon.png" />
+    <EmbeddedResource Include="..\TizenGlowUI\js\wsClient.js" LogicalName="TizenGlowUI.js.wsClient.js" />
+    <EmbeddedResource Include="..\TizenGlowUI\js\calibration.js" LogicalName="TizenGlowUI.js.calibration.js" />
   </ItemGroup>
 
 </Project>

@@ -12,5 +12,13 @@
     <Compile Include="../TizenGlow/Wled/LedLayout.cs" />
     <Compile Include="../TizenGlow/Wled/NanoleafSender.cs" />
     <Compile Include="../TizenGlow/VideoPlaneCapturer.cs" />
+    <Compile Include="../TizenGlow/WebSocket/WebUiServer.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="..\TizenGlowUI\index.html" LogicalName="TizenGlowUI.index.html" />
+    <EmbeddedResource Include="..\TizenGlowUI\main.css" LogicalName="TizenGlowUI.main.css" />
+    <EmbeddedResource Include="..\TizenGlowUI\icon.png" LogicalName="TizenGlowUI.icon.png" />
+    <EmbeddedResource Include="..\TizenGlowUI\js\wsClient.js" LogicalName="TizenGlowUI.js.wsClient.js" />
+    <EmbeddedResource Include="..\TizenGlowUI\js\calibration.js" LogicalName="TizenGlowUI.js.calibration.js" />
   </ItemGroup>
 </Project>

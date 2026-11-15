@@ -456,3 +456,13 @@ button:focus, .form input:focus, .toggle input:focus, .ssdpItem:focus {
 #calWarn:empty {
     display: none;
 }
+
+@media (max-width: 1100px) {
+    :root { --px: 0.55px; }
+    html, body { height: auto; overflow: auto; }
+    .topbar { padding: 16px 16px 0; flex-wrap: wrap; gap: 8px; }
+    .columns { display: block; height: auto; padding: 12px 16px 32px; }
+    #controls, #captureStatus { width: 100%; height: auto; overflow: visible; padding: 0; }
+    #captureStatus { margin-top: 16px; }
+}
+

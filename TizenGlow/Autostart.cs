@@ -13,7 +13,7 @@ namespace TizenGlow
     public static class Autostart
     {
         /// <summary>The service's own app ID (tizen-manifest.xml).</summary>
-        public const string AppId = "io.gh.duckieonquacks.TizenGlow";
+        public const string AppId = "io.gh.darkxeno.TizenGlow";
 
         /// <summary>The shortest repeat Tizen allows for this kind of alarm.</summary>
         public const int PeriodSec = 600;

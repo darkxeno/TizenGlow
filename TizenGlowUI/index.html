@@ -284,19 +284,24 @@
         for (const id of ['ledTop', 'ledRight', 'ledBottom', 'ledLeft']) document.getElementById(id).addEventListener('input', showLedTotal);
         showOutputMode('hyperhdr');
 
-        fetch('http://127.0.0.1:8081').then(res => res.text()).then(ip => {
-            deviceIP = ip;
+        if (location.protocol.startsWith('http') && location.hostname) {
+            deviceIP = location.hostname;
+            open();
+        } else {
+            fetch('http://127.0.0.1:8081').then(res => res.text()).then(ip => {
+                deviceIP = ip;
 
-            const testWS = new WebSocket(`ws://${ip}:8086`);
+                const testWS = new WebSocket(`ws://${ip}:8086`);
 
-            testWS.onopen = function () {
-                testWS.close();
-                open();
-            };
-            testWS.onerror = function () {
-                location.reload();
-            };
-        });
+                testWS.onopen = function () {
+                    testWS.close();
+                    open();
+                };
+                testWS.onerror = function () {
+                    location.reload();
+                };
+            });
+        }
     };
 </script>
 
