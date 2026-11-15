@@ -11,6 +11,7 @@ name: Release
 
 on:
   push:
+    branches: [main]
     tags: ['v*']
   workflow_dispatch:
 
@@ -69,12 +70,19 @@ jobs:
           path: io.gh.duckieonquacks.TizenGlow-${{ env.VERSION }}.tpk*
 
       - name: Publish release
-        if: github.ref_type == 'tag'
+        if: github.ref_type == 'tag' || (github.ref_type == 'branch' && github.ref_name == 'main')
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
           module=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
           tpk="io.gh.duckieonquacks.TizenGlow-$VERSION.tpk"
+          if [ "$GITHUB_REF_TYPE" = tag ]; then
+            release_tag="$GITHUB_REF_NAME"
+          elif git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then
+            release_tag="v$VERSION-r${GITHUB_RUN_NUMBER}"
+          else
+            release_tag="v$VERSION"
+          fi
           if [ "$MIN_SERVICE" = "$VERSION" ]; then
             install="Install both. The page's top bar shows \`v$VERSION\` when the service and the page match, and says which one to update when they don't."
           else
@@ -84,8 +92,8 @@ jobs:
           **TV service:** \`$tpk\`, SHA-256 \`$SHA256\`.
           It is signed only with the Tizen SDK test certificates, so re-sign it for your TV (TizenBrew Installer or Tizen Studio) before installing.
 
-          **Settings page:** in TizenBrew add the GitHub module \`$module\` to always get the latest release, or \`$module@$GITHUB_REF_NAME\` to stay on this one.
+          **Settings page:** in TizenBrew add the GitHub module \`$module\` to always get the latest release, or \`$module@$release_tag\` to stay on this one.
 
           $install
           EOF
-          gh release create "$GITHUB_REF_NAME" "$tpk" "$tpk.sha256" --title "TizenGlow $VERSION" --notes-file notes.md
+          gh release create "$release_tag" "$tpk" "$tpk.sha256" --target "$GITHUB_SHA" --title "TizenGlow $release_tag" --notes-file notes.md
