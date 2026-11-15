@@ -35,7 +35,8 @@ namespace TizenGlowUIApp
 
             _window = new Window("TizenGlow")
             {
-                AvailableRotations = DisplayRotation.Degree_0
+                AvailableRotations = DisplayRotation.Degree_0,
+                BackgroundColor = new Color(13, 17, 23, 255)
             };
             _window.BackButtonPressed += (s, e) => Exit();
             _window.Show();
@@ -57,6 +58,7 @@ namespace TizenGlowUIApp
             // Give the background service a brief moment if it just started before loading 127.0.0.1:8090
             _webView.LoadError += (s, e) =>
             {
+                EnsureServiceRunning();
                 Task.Delay(1000).ContinueWith(_ =>
                 {
                     EcoreMainloop.Post(() =>
