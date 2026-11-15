@@ -30,7 +30,7 @@ jobs:
 
       - name: Check the versions agree
         run: |
-          manifest=$(grep -o 'package="io.gh.duckieonquacks.TizenGlow" version="[^"]*"' TizenGlow/tizen-manifest.xml | sed 's/.*version="//; s/"$//')
+          manifest=$(grep -o 'package="io.gh.darkxeno.TizenGlow" version="[^"]*"' TizenGlow/tizen-manifest.xml | sed 's/.*version="//; s/"$//')
           package=$(jq -r .version package.json)
           page=$(grep -o "const uiVersion = '[^']*'" TizenGlowUI/js/wsClient.js | cut -d"'" -f2)
           min=$(grep -o "const minService = '[^']*'" TizenGlowUI/js/wsClient.js | cut -d"'" -f2)
@@ -58,7 +58,7 @@ jobs:
 
       - name: Checksum
         run: |
-          tpk="io.gh.duckieonquacks.TizenGlow-$VERSION.tpk"
+          tpk="io.gh.darkxeno.TizenGlow-$VERSION.tpk"
           cp "TizenGlow/bin/Release/tizen90/$tpk" .
           sha256sum "$tpk" | tee "$tpk.sha256"
           echo "SHA256=$(cut -d' ' -f1 "$tpk.sha256")" >> "$GITHUB_ENV"
@@ -66,8 +66,8 @@ jobs:
       - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
-          name: io.gh.duckieonquacks.TizenGlow-${{ env.VERSION }}
-          path: io.gh.duckieonquacks.TizenGlow-${{ env.VERSION }}.tpk*
+          name: io.gh.darkxeno.TizenGlow-${{ env.VERSION }}
+          path: io.gh.darkxeno.TizenGlow-${{ env.VERSION }}.tpk*
 
       - name: Publish release
         if: github.ref_type == 'tag' || (github.ref_type == 'branch' && github.ref_name == 'main')
@@ -75,7 +75,7 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           module=$(echo "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
-          tpk="io.gh.duckieonquacks.TizenGlow-$VERSION.tpk"
+          tpk="io.gh.darkxeno.TizenGlow-$VERSION.tpk"
           if [ "$GITHUB_REF_TYPE" = tag ]; then
             release_tag="$GITHUB_REF_NAME"
           elif git ls-remote --exit-code --tags origin "refs/tags/v$VERSION" >/dev/null 2>&1; then

@@ -1,6 +1,11 @@
 using System;
 using System.Diagnostics;
+using System.Net;
+using System.Net.Http;
+using System.Net.Sockets;
+using System.Threading;
 using TizenGlow;
+using TizenGlow.WebSocket;
 using TizenGlow.Wled;
 
 internal static class Program
@@ -20,6 +25,7 @@ internal static class Program
         TestVideoPlaneHdrVsSdrSampling();
         TestVideoPlaneBlackBarsDetectionAndDisable();
         TestLetterboxStateMachine();
+        TestWebUiServerResolutionAndHttpServing();
         Console.WriteLine("ALL TESTS PASSED.");
         return 0;
     }
@@ -389,5 +395,46 @@ internal static class Program
         Assert(Letterbox.TrySetMode("on") && Letterbox.Mode == "on" && Letterbox.Inset && Letterbox.State == "always", "Letterbox on failed");
         Assert(Letterbox.TrySetMode("auto") && Letterbox.Mode == "auto" && !Letterbox.Inset && Letterbox.State == "watching", "Letterbox auto failed");
         Assert(!Letterbox.TrySetMode("bogus"), "Invalid letterbox mode should be rejected");
+    }
+
+    private static void TestWebUiServerResolutionAndHttpServing()
+    {
+        string res, ct;
+        Assert(WebUiServer.TryResolveResource("/", out res, out ct) && res == "TizenGlowUI.index.html" && ct.StartsWith("text/html"), "Resolve / failed");
+        Assert(WebUiServer.TryResolveResource("/index.html?v=1", out res, out ct) && res == "TizenGlowUI.index.html", "Resolve /index.html?v=1 failed");
+        Assert(WebUiServer.TryResolveResource("/js/wsClient.js", out res, out ct) && res == "TizenGlowUI.js.wsClient.js" && ct.Contains("javascript"), "Resolve wsClient.js failed");
+        Assert(WebUiServer.TryResolveResource("/main.css", out res, out ct) && res == "TizenGlowUI.main.css" && ct.StartsWith("text/css"), "Resolve main.css failed");
+        Assert(!WebUiServer.TryResolveResource("/../secret", out res, out ct), "Unexpected path should return false");
+
+        var probe = new TcpListener(IPAddress.Loopback, 0);
+        probe.Start();
+        int port = ((IPEndPoint)probe.LocalEndpoint).Port;
+        probe.Stop();
+
+        using var cts = new CancellationTokenSource();
+        var server = new WebUiServer($"http://127.0.0.1:{port}/", typeof(Program).Assembly);
+        var serverTask = server.StartAsync(cts.Token);
+
+        try
+        {
+            using var http = new HttpClient();
+            var htmlResp = http.GetAsync($"http://127.0.0.1:{port}/").GetAwaiter().GetResult();
+            Assert(htmlResp.StatusCode == HttpStatusCode.OK, $"Expected 200 for /, got {htmlResp.StatusCode}");
+            string html = htmlResp.Content.ReadAsStringAsync().GetAwaiter().GetResult();
+            Assert(html.Contains("TizenGlow") && html.Contains("nanoleafEnabled"), "index.html should contain TizenGlow UI");
+
+            var jsResp = http.GetAsync($"http://127.0.0.1:{port}/js/wsClient.js").GetAwaiter().GetResult();
+            Assert(jsResp.StatusCode == HttpStatusCode.OK, $"Expected 200 for wsClient.js, got {jsResp.StatusCode}");
+
+            var missResp = http.GetAsync($"http://127.0.0.1:{port}/missing.txt").GetAwaiter().GetResult();
+            Assert(missResp.StatusCode == HttpStatusCode.NotFound, $"Expected 404 for missing.txt, got {missResp.StatusCode}");
+            Console.WriteLine($"[Test] WebUiServer HTTP serving on port {port} OK");
+        }
+        finally
+        {
+            cts.Cancel();
+            server.Stop();
+            try { serverTask.Wait(1000); } catch { }
+        }
     }
 }

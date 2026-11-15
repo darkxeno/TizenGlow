@@ -1,8 +1,8 @@
 const interval = setInterval(() => {
     try {
-        tizen.application.getAppInfo('io.gh.duckieonquacks.TizenGlow');
+        tizen.application.getAppInfo('io.gh.darkxeno.TizenGlow');
         tizen.application.launch(
-            'io.gh.duckieonquacks.TizenGlow',
+            'io.gh.darkxeno.TizenGlow',
             function () {
                 console.log('Launch Service succeeded');
                 clearInterval(interval);

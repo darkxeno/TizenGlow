@@ -1,4 +1,4 @@
-﻿using Tizen.Applications;
+using Tizen.Applications;
 using Tizen.Applications.Notifications;
 using Tizen.System;
 using TizenGlow.WebSocket;
@@ -14,6 +14,7 @@ namespace TizenGlow
             base.OnCreate();
             if (!Preference.Contains("enabled")) Preference.Set("enabled", "false");
             Task.Run(() => WebSocketServer.StartServerAsync());
+            Task.Run(() => new WebUiServer().StartAsync());
             Display.StateChanged += Display_StateChanged;
             Capturer.Probe(); // publish detectedApi / captureState even while capture is disabled
             // Started by the autostart alarm while the TV is in standby: wait for the screen to come on

@@ -1,5 +1,5 @@
 {
-  "name": "@duckieonquacks/tizenglow",
+  "name": "@darkxeno/tizenglow",
   "appName": "TizenGlow",
   "version": "1.0.0",
   "description": "TizenGlow lights WLED or HyperHDR LEDs from what's on a Samsung Tizen TV's screen.",
