@@ -26,6 +26,7 @@ namespace TizenGlow
             // (Display_StateChanged turns capture on then) instead of capturing a dark panel.
             try { if (Display.State == DisplayState.Off) Configuration.Enabled = false; } catch { }
             client = new HyperionClient();
+            try { if (Display.State != DisplayState.Off) VpBridgeManager.EnsureRunningAsync(); } catch { VpBridgeManager.EnsureRunningAsync(); }
             AppLog.Info("App", "Service OnCreate ready");
         }
 
@@ -37,6 +38,7 @@ namespace TizenGlow
             } else if (e.State == DisplayState.Normal)
             {
                 Configuration.Enabled = bool.Parse(Preference.Get<string>("enabled"));
+                VpBridgeManager.EnsureRunningAsync();
                 Task.Run(() => client.Start());
             }
         }
@@ -73,6 +75,7 @@ namespace TizenGlow
 
         protected override void OnTerminate()
         {
+            VpBridgeManager.StopOwned();
             base.OnTerminate();
         }
 
