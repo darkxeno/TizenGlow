@@ -6,3 +6,5 @@ bin
 *.csproj.user
 .sign
 *.wgt
+.local/
+Library/

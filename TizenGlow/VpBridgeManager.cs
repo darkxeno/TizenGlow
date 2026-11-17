@@ -2,6 +2,7 @@ using System;
 using System.Diagnostics;
 using System.IO;
 using System.Runtime.InteropServices;
+using System.Security.Cryptography;
 using System.Threading.Tasks;
 using Tizen.Applications;
 
@@ -29,13 +30,6 @@ namespace TizenGlow
             {
                 try
                 {
-                    if (IsAlreadyRunning())
-                    {
-                        _status = "running (existing instance)";
-                        AppLog.Info("VpBridge", "vp_bridge already running; skipping launch");
-                        return;
-                    }
-
                     string resPath = Path.Combine(Application.Current.DirectoryInfo.Resource, "vp_bridge");
                     if (!File.Exists(resPath))
                     {
@@ -49,17 +43,37 @@ namespace TizenGlow
                     string binPath = Path.Combine(dataDir, "vp_bridge");
                     string logPath = Path.Combine(dataDir, "vp_bridge.log");
 
-                    bool needsCopy = !File.Exists(binPath) ||
-                                     new FileInfo(resPath).Length != new FileInfo(binPath).Length ||
-                                     File.GetLastWriteTimeUtc(resPath) > File.GetLastWriteTimeUtc(binPath);
+                    string resHash = ComputeSha256(resPath);
+                    string binHash = File.Exists(binPath) ? ComputeSha256(binPath) : null;
+                    bool binaryUpdated = !string.Equals(resHash, binHash, StringComparison.OrdinalIgnoreCase);
 
-                    if (needsCopy)
+                    if (binaryUpdated)
                     {
+                        AppLog.Info("VpBridge", $"New vp_bridge binary detected (sha256={resHash.Substring(0, 12)}), stopping owned instances");
+                        StopOwnedInternal(binPath);
                         File.Copy(resPath, binPath, overwrite: true);
+                        chmod(binPath, 0x1ED); // 0755
+                    }
+                    else
+                    {
+                        chmod(binPath, 0x1ED);
+                        if (IsAlreadyRunning())
+                        {
+                            _status = "running (existing instance)";
+                            AppLog.Info("VpBridge", "vp_bridge already running and up-to-date; skipping launch");
+                            return;
+                        }
                     }
 
-                    chmod(binPath, 0x1ED); // 0755
+                    // Si hay una instancia externa (ej. /run/vp_bridge como root) enviando UDP, no duplicar
+                    if (TgvpUdpReceiver.IsActive)
+                    {
+                        _status = "running (external instance)";
+                        AppLog.Info("VpBridge", "External TGVP UDP source active; skipping user-mode launch");
+                        return;
+                    }
 
+                    string ver = ReadBinaryVersion(binPath);
                     var psi = new ProcessStartInfo
                     {
                         FileName = binPath,
@@ -73,8 +87,8 @@ namespace TizenGlow
                     _childProcess = Process.Start(psi);
                     if (_childProcess != null && !_childProcess.HasExited)
                     {
-                        _status = "running (pid=" + _childProcess.Id + ")";
-                        AppLog.Info("VpBridge", "Started user-mode vp_bridge pid=" + _childProcess.Id);
+                        _status = $"running ({ver}, pid={_childProcess.Id})";
+                        AppLog.Info("VpBridge", $"Started user-mode {ver} pid={_childProcess.Id}");
                     }
                     else
                     {
@@ -90,13 +104,46 @@ namespace TizenGlow
             }
         }
 
+        private static string ComputeSha256(string path)
+        {
+            using (var sha = SHA256.Create())
+            using (var stream = File.OpenRead(path))
+            {
+                byte[] hash = sha.ComputeHash(stream);
+                return BitConverter.ToString(hash).Replace("-", "").ToLowerInvariant();
+            }
+        }
+
+        private static string ReadBinaryVersion(string binPath)
+        {
+            try
+            {
+                var psi = new ProcessStartInfo
+                {
+                    FileName = binPath,
+                    Arguments = "--version",
+                    UseShellExecute = false,
+                    RedirectStandardOutput = true,
+                    RedirectStandardError = true
+                };
+                using (var p = Process.Start(psi))
+                {
+                    if (p != null && p.WaitForExit(1000))
+                    {
+                        string outText = p.StandardOutput.ReadToEnd().Trim();
+                        if (!string.IsNullOrEmpty(outText)) return outText;
+                    }
+                }
+            }
+            catch { }
+            return "vp_bridge";
+        }
+
         public static bool IsAlreadyRunning()
         {
-            // 1. Si ya llegan datagramas TGVP por UDP :19446, hay una instancia activa
             if (TgvpUdpReceiver.IsActive)
                 return true;
 
-            // 2. Si el proceso hijo lanzado por nosotros sigue vivo
             if (_childProcess != null)
             {
                 try
@@ -107,7 +154,6 @@ namespace TizenGlow
                 catch { }
             }
 
-            // 3. Escanear /proc buscando una instancia previa (incluso en reposo sin emitir UDP)
             try
             {
                 int myPid = Process.GetCurrentProcess().Id;
@@ -126,18 +172,15 @@ namespace TizenGlow
                         return true;
                 }
             }
-            catch
-            {
-            }
+            catch { }
 
             return false;
         }
 
-        public static void StopOwned()
+        private static void StopOwnedInternal(string ownedBinPath)
         {
-            lock (_lock)
+            if (_childProcess != null)
             {
-                if (_childProcess == null) return;
                 try
                 {
                     if (!_childProcess.HasExited)
@@ -151,8 +194,58 @@ namespace TizenGlow
                 {
                     _childProcess.Dispose();
                     _childProcess = null;
-                    _status = "stopped";
                 }
+            }
+
+            // Matar también procesos huérfanos en modo usuario ejecutándose desde Data/vp_bridge
+            try
+            {
+                int myPid = Process.GetCurrentProcess().Id;
+                foreach (string dir in Directory.EnumerateDirectories("/proc"))
+                {
+                    string name = Path.GetFileName(dir);
+                    if (!int.TryParse(name, out int pid) || pid == myPid)
+                        continue;
+
+                    string cmdlinePath = Path.Combine(dir, "cmdline");
+                    bool isOwned = false;
+
+                    try
+                    {
+                        if (File.Exists(cmdlinePath))
+                        {
+                            string cmd = File.ReadAllText(cmdlinePath).Replace('\0', ' ');
+                            if (cmd.Contains(ownedBinPath))
+                                isOwned = true;
+                        }
+                    }
+                    catch { }
+
+                    if (isOwned)
+                    {
+                        try
+                        {
+                            using (var proc = Process.GetProcessById(pid))
+                            {
+                                proc.Kill();
+                                proc.WaitForExit(1000);
+                            }
+                        }
+                        catch { }
+                    }
+                }
+            }
+            catch { }
+        }
+
+        public static void StopOwned()
+        {
+            lock (_lock)
+            {
+                string dataDir = Application.Current.DirectoryInfo.Data;
+                string binPath = Path.Combine(dataDir, "vp_bridge");
+                StopOwnedInternal(binPath);
+                _status = "stopped";
             }
         }
     }
