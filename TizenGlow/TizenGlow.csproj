@@ -16,6 +16,9 @@
   <ItemGroup>
     <Folder Include="lib\" />
     <Folder Include="res\" />
+    <Content Include="res\vp_bridge">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
   <!-- The service reports its version to TizenGlowUI. Take it from tizen-manifest.xml (the TPK's own
