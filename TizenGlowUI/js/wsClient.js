@@ -1,5 +1,5 @@
 // This page's version. Must equal tizen-manifest.xml and package.json; the release workflow checks.
-const uiVersion = '1.4.7';
+const uiVersion = '1.4.8';
 // Oldest service (TPK) this page works with. Raise it only when the page needs something new from the
 // service; a page-only release leaves it, and that release's TPK is then optional.
 const minService = '1.4.2'; // standalone WebUI + io.gh.darkxeno.TizenGlow
@@ -416,11 +416,22 @@ window.testWled = color => {
     showStatus('testStatus', `${testLabels[color]} sent to WLED for 10 s`);
 }
 
+window.controlVpBridge = action => {
+    if (!connected()) {
+        showStatus('vpBridgeHint', 'Not connected to the TizenGlow service yet', true);
+        return;
+    }
+    send({ event: events.SetConfig, key: 'vpBridgeAction', value: action });
+    showStatus('vpBridgeHint', action === 'start' ? 'Starting vp_bridge...' : 'Stopping owned vp_bridge...');
+    setTimeout(() => send({ event: events.ReadConfig, key: 'vpBridgeStatus' }), 500);
+};
+
 // Written by the native service (Capturer.cs) as preferences; read back with ReadConfig.
 const captureStatusKeys = ['captureState', 'detectedApi', 'detectedPlatformVersion', 'videoPlaneStatus', 'lastCaptureError'];
 
 function readCaptureStatus() {
     for (const key of captureStatusKeys) send({ event: events.ReadConfig, key });
+    send({ event: events.ReadConfig, key: 'vpBridgeStatus' });
     send({ event: events.ReadConfig, key: 'captureStats' });
     if (outputSel.value === 'wled') send({ event: events.ReadConfig, key: 'ledPreview' });
 }
@@ -610,6 +621,8 @@ function onMessage(data) {
                 showLedPreview(msg);
             } else if (msg.key === 'captureStats') {
                 showCaptureStats(msg);
+            } else if (msg.key === 'vpBridgeStatus') {
+                setText('vpBridgeStatus', msg.error ? '-' : String(msg.value));
             } else if (captureStatusKeys.indexOf(msg.key) !== -1) {
                 showCaptureStatus(msg);
             }

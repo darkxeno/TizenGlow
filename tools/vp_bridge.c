@@ -16,6 +16,7 @@
 #include <time.h>
 #include <unistd.h>
 
+#define VP_BRIDGE_VERSION "1.1.0"
 #define PLANE_W 960
 #define PLANE_H 540
 #define Y_BYTES (PLANE_W * PLANE_H)
@@ -574,12 +575,20 @@ static void print_usage(const char *prog) {
     printf("  --daemon           Fork, setsid, and close all inherited FDs >= 3\n");
     printf("  --log <path>       Redirect stdout/stderr to file (used with --daemon)\n");
     printf("  --verbose          Print periodic FPS/capture stats\n");
+    printf("  --version          Print version and exit\n");
     printf("  --help             Show this help\n");
 }
 
 int main(int argc, char **argv) {
     setvbuf(stdout, NULL, _IONBF, 0);
     setvbuf(stderr, NULL, _IONBF, 0);
+
+    for (int i = 1; i < argc; i++) {
+        if (strcmp(argv[i], "--version") == 0) {
+            printf("vp_bridge %s\n", VP_BRIDGE_VERSION);
+            return 0;
+        }
+    }
 
     if (geteuid() == 0) {
         (void)setuid(0);

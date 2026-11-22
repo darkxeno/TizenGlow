@@ -141,6 +141,10 @@ namespace TizenGlow.WebSocket
                     ? new ReadConfigResultEvent(false, readConfigEvent.key, preview)
                     : new ReadConfigResultEvent(true, readConfigEvent.key, "No LED frame yet."));
             }
+            else if (readConfigEvent.key == "vpBridgeStatus")
+            {
+                result = JsonConvert.SerializeObject(new ReadConfigResultEvent(false, readConfigEvent.key, VpBridgeManager.Status));
+            }
             else if (readConfigEvent.key == "nanoleafDiscover")
             {
                 string ip = await Task.Run(() => TizenGlow.Wled.NanoleafSender.DiscoverNanoleafIp());
@@ -361,6 +365,14 @@ namespace TizenGlow.WebSocket
                     {
                         if (!Levels.TrySetBlack(setConfigEvent.value)) return;
                         break;
+                    }
+                case "vpBridgeAction":
+                    {
+                        if (setConfigEvent.value == "start")
+                            VpBridgeManager.EnsureRunningAsync();
+                        else if (setConfigEvent.value == "stop")
+                            Task.Run(() => VpBridgeManager.StopOwned());
+                        return;
                     }
                 case "measureLevels":
                     {
