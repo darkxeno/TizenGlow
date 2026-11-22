@@ -6,6 +6,7 @@
 #include <math.h>
 #include <netinet/in.h>
 #include <signal.h>
+#include <stdarg.h>
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,7 +17,22 @@
 #include <time.h>
 #include <unistd.h>
 
-#define VP_BRIDGE_VERSION "1.1.0"
+#define VP_BRIDGE_VERSION "1.1.1"
+
+static void vp_log(FILE *out, const char *fmt, ...) {
+    time_t now = time(NULL);
+    struct tm tm_now;
+    char ts[32] = "0000-00-00 00:00:00";
+    if (localtime_r(&now, &tm_now) != NULL) {
+        strftime(ts, sizeof(ts), "%Y-%m-%d %H:%M:%S", &tm_now);
+    }
+    fprintf(out, "[%s] [vp_bridge] ", ts);
+    va_list ap;
+    va_start(ap, fmt);
+    vfprintf(out, fmt, ap);
+    va_end(ap);
+    fputc('\n', out);
+}
 #define PLANE_W 960
 #define PLANE_H 540
 #define Y_BYTES (PLANE_W * PLANE_H)
@@ -713,7 +729,7 @@ int main(int argc, char **argv) {
             return 1;
         }
         if (pid > 0) {
-            printf("[vp_bridge] Spawned daemon pid=%d\n", (int)pid);
+            vp_log(stdout, "Spawned daemon pid=%d", (int)pid);
             return 0;
         }
         setsid();
@@ -762,9 +778,9 @@ int main(int argc, char **argv) {
             int tz_init_rc = fn_tz_init(tzc);
             if (tz_init_rc == 0) {
                 tz_ready = 1;
-                printf("[vp_bridge] TrustZone DRM capture (libtzcapturec.so cmd=2) initialized.\n");
+                vp_log(stdout, "TrustZone DRM capture (libtzcapturec.so cmd=2) initialized.");
             } else {
-                fprintf(stderr, "[vp_bridge] TZCAPTURE_Initialize returned %d\n", tz_init_rc);
+                vp_log(stderr, "TZCAPTURE_Initialize returned %d", tz_init_rc);
                 free(tzc);
                 tzc = NULL;
             }
@@ -819,7 +835,7 @@ int main(int argc, char **argv) {
     int cand_top = 0, cand_bottom = PLANE_H;
     int hold_count = 0;
 
-    printf("[vp_bridge] target=%s:%d fps=%d points=%d (%d/%d/%d/%d) mode=%s profile=%s fmt=%s matrix=%s hdr=%d bars=%d tz=%d\n",
+    vp_log(stdout, "target=%s:%d fps=%d points=%d (%d/%d/%d/%d) mode=%s profile=%s fmt=%s matrix=%s hdr=%d bars=%d tz=%d",
            host, port, fps, point_count, top, right, bottom, left,
            ui_mode, g_profiles[cur_prof].name,
            is_nv21 ? "nv21" : "nv12",
@@ -845,7 +861,7 @@ int main(int argc, char **argv) {
                                        g_profiles[cur_prof].inset,
                                        points, MAX_POINTS);
                 enforce_target_fps_30();
-                printf("[vp_bridge] UI mode changed -> mode=%s profile=%s (zone=%dx%d stride=%d inset=%.2f amb=%.2f alpha=%.3f slew=%.2f)\n",
+                vp_log(stdout, "UI mode changed -> mode=%s profile=%s (zone=%dx%d stride=%d inset=%.2f amb=%.2f alpha=%.3f slew=%.2f)",
                        ui_mode, g_profiles[cur_prof].name,
                        g_profiles[cur_prof].patch_w, g_profiles[cur_prof].patch_h,
                        g_profiles[cur_prof].stride, g_profiles[cur_prof].inset,
@@ -853,7 +869,7 @@ int main(int argc, char **argv) {
                        g_profiles[cur_prof].max_step);
             }
             if (check_tizenglow_hdr(&hdr_mtime, &use_hdr)) {
-                printf("[vp_bridge] UI HDR setting changed -> hdr=%d (%s)\n",
+                vp_log(stdout, "UI HDR setting changed -> hdr=%d (%s)",
                        use_hdr, use_hdr ? "HDR PQ + BT.2020->BT.709" : "SDR BT.709");
             }
         }
@@ -872,7 +888,7 @@ int main(int argc, char **argv) {
         if (sec_rc == 0) {
             if (use_tz) {
                 use_tz = 0;
-                printf("[vp_bridge] Switched to secvideo capture\n");
+                vp_log(stdout, "Switched to secvideo capture");
             }
             int ret_w = *(int32_t *)(param + 0x08);
             int ret_h = *(int32_t *)(param + 0x0c);
@@ -901,7 +917,7 @@ int main(int argc, char **argv) {
                 c_stride = w;
                 if (!use_tz) {
                     use_tz = 1;
-                    printf("[vp_bridge] Switched to TrustZone DRM capture (sec_rc=%d, cmd=2, %dx%d)\n",
+                    vp_log(stdout, "Switched to TrustZone DRM capture (sec_rc=%d, cmd=2, %dx%d)",
                            sec_rc, w, h);
                 }
             } else {
@@ -941,7 +957,7 @@ int main(int argc, char **argv) {
             double elapsed = (double)(now.tv_sec - stat_ts.tv_sec) +
                              (double)(now.tv_nsec - stat_ts.tv_nsec) / 1e9;
             if (elapsed >= 2.0) {
-                printf("[vp_bridge] %.1f FPS (ok=%llu err=%llu(%d) src=%s mode=%s prof=%s bars=%d..%d first_rgb=%u,%u,%u)\n",
+                vp_log(stdout, "%.1f FPS (ok=%llu err=%llu(%d) src=%s mode=%s prof=%s bars=%d..%d first_rgb=%u,%u,%u)",
                        (double)frames_ok / elapsed,
                        (unsigned long long)frames_ok,
                        (unsigned long long)frames_err,
@@ -963,7 +979,7 @@ int main(int argc, char **argv) {
         } while (sleep_rc == EINTR && g_running);
     }
 
-    printf("[vp_bridge] Shutting down cleanly.\n");
+    vp_log(stdout, "Shutting down cleanly.");
     close(sock);
     if (tz_ready && fn_tz_finalize && tzc) {
         fn_tz_finalize(tzc);
